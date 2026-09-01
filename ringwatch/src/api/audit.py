@@ -137,8 +137,8 @@ class AuditWriter:
                 self.error = f"{type(exc).__name__}: {exc}"
                 self._engine = None
 
-        if self.backend == "jsonl":
-            self.jsonl_path.parent.mkdir(parents=True, exist_ok=True)
+        self.jsonl_path.parent.mkdir(parents=True, exist_ok=True)
+
 
     def _jsonl(self, record: dict[str, Any]) -> None:
         """Append one record to the fallback file."""
@@ -213,9 +213,6 @@ class AuditWriter:
                     )
             except Exception as exc:  # pragma: no cover
                 self.error = f"{type(exc).__name__}: {exc}"
-                self._jsonl({"event": "score.transaction", "payload": score})
-        else:
-            self._jsonl({"event": "score.transaction", "payload": score})
         self.log_event("score.transaction", score, score.get("transaction_id"))
 
     def log_rings(self, rings: list[dict[str, Any]]) -> None:
@@ -225,7 +222,7 @@ class AuditWriter:
             rings: Serialized ring summaries.
         """
         if self._engine is None:
-            self._jsonl({"event": "rings.upsert", "payload": {"n_rings": len(rings)}})
+            self._jsonl({"event": "rings.upsert", "payload": rings})
             return
         try:  # pragma: no cover - depends on a live database
             from sqlalchemy import text
@@ -241,7 +238,10 @@ class AuditWriter:
                             "ON CONFLICT (ring_id) DO UPDATE SET "
                             " size = EXCLUDED.size, "
                             " n_transactions = EXCLUDED.n_transactions, "
-                            " mean_risk_score = EXCLUDED.mean_risk_score"
+                            " mean_risk_score = EXCLUDED.mean_risk_score, "
+                            " max_risk_score = EXCLUDED.max_risk_score, "
+                            " detected_typology = EXCLUDED.detected_typology, "
+                            " accounts = EXCLUDED.accounts"
                         ) if "postgresql" in self.database_url else text(
                             "INSERT INTO rings (ring_id, size, n_transactions, mean_risk_score, "
                             " max_risk_score, detected_typology, accounts) "
@@ -250,7 +250,10 @@ class AuditWriter:
                             "ON CONFLICT(ring_id) DO UPDATE SET "
                             " size = excluded.size, "
                             " n_transactions = excluded.n_transactions, "
-                            " mean_risk_score = excluded.mean_risk_score"
+                            " mean_risk_score = excluded.mean_risk_score, "
+                            " max_risk_score = excluded.max_risk_score, "
+                            " detected_typology = excluded.detected_typology, "
+                            " accounts = excluded.accounts"
                         ),
                         {
                             "ring_id": ring.get("ring_id"),
