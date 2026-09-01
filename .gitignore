@@ -4,7 +4,7 @@ SUBMISSION_GUIDE.md
 submission_notes.md
 *.private.md
 
-# --- Data (Kaggle CSVs & heavy artifacts are downloaded/generated locally; never commit them) ---
+# --- Data & Heavy Artifacts (only ignore data folders, not src/data or src/models) ---
 /data/
 /ringwatch/data/
 *.csv
@@ -46,5 +46,6 @@ Thumbs.db
 /models/
 /ringwatch/models/
 /artifacts/
+/ringwatch/artifacts/
 /logs/
-
+/ringwatch/logs/
