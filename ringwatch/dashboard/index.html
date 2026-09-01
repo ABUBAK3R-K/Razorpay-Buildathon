@@ -4,69 +4,153 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>RingWatch — Abuse-Ring Sentinel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.9/dist/vis-network.min.js"></script>
 <style>
   :root{
-    --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a;
-    --ink:#e6e9ef; --muted:#8b93a3; --accent:#4f9cf9;
-    --risk-hi:#ef4444; --risk-mid:#f59e0b; --risk-lo:#22c55e;
-    --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-    --mono:"SF Mono",Menlo,Consolas,monospace;
+    --bg:#f5f0e8;
+    --surface:#faf7f2;
+    --surface2:#f0ebe0;
+    --border:#e0d8c8;
+    --border-light:#e8e2d4;
+    --ink:#2c2416;
+    --ink-secondary:#5c5343;
+    --ink-muted:#8a7f6e;
+    --accent:#6b5c3e;
+    --accent-light:#8a7a5a;
+    --risk-hi:#b5423a;
+    --risk-mid:#c4873a;
+    --risk-lo:#4a8c5c;
+    --win:#3d7a4f;
+    --badge-bg:#f0e8d4;
+    --badge-border:#d4c8a8;
+    --badge-text:#6b5c3e;
+    --font:'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --mono:'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
   }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 var(--font)}
-  header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
-    padding:14px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
-  header h1{font-size:17px;margin:0;letter-spacing:-.01em}
-  .sub{color:var(--muted);font-size:12px}
-  .badge{margin-left:auto;font-size:11px;font-weight:600;letter-spacing:.04em;
-    padding:4px 10px;border-radius:20px;background:#14331f;color:#4ade80;border:1px solid #1d5232}
-  main{display:grid;grid-template-columns:minmax(300px,380px) 1fr;gap:14px;padding:14px;
-    height:calc(100vh - 55px)}
-  @media(max-width:900px){main{grid-template-columns:1fr;height:auto}}
-  .col{display:flex;flex-direction:column;gap:14px;min-height:0}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;
-    padding:14px;min-height:0}
-  .card h2{margin:0 0 10px;font-size:11px;text-transform:uppercase;letter-spacing:.09em;
-    color:var(--muted);font-weight:600}
-  table{width:100%;border-collapse:collapse;font-size:12.5px}
-  th,td{text-align:right;padding:6px 5px;border-bottom:1px solid var(--line)}
+  *{box-sizing:border-box; margin:0}
+  html{-webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale}
+  body{background:var(--bg);color:var(--ink);font:14px/1.55 var(--font)}
+
+  /* ── Header ── */
+  header{
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    padding:16px 24px;
+    border-bottom:1px solid var(--border);
+    background:var(--surface);
+  }
+  header h1{
+    font-size:18px; font-weight:700; margin:0;
+    color:var(--ink); letter-spacing:-.02em;
+  }
+  .sub{color:var(--ink-muted); font-size:12.5px; font-weight:400}
+  .badge{
+    margin-left:auto;
+    font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase;
+    padding:5px 12px; border-radius:6px;
+    background:var(--badge-bg); color:var(--badge-text);
+    border:1px solid var(--badge-border);
+  }
+
+  /* ── Layout ── */
+  main{
+    display:grid; grid-template-columns:minmax(300px,400px) 1fr;
+    gap:16px; padding:16px;
+    height:calc(100vh - 58px);
+  }
+  @media(max-width:900px){main{grid-template-columns:1fr; height:auto}}
+  .col{display:flex; flex-direction:column; gap:16px; min-height:0}
+
+  /* ── Cards ── */
+  .card{
+    background:var(--surface);
+    border:1px solid var(--border-light);
+    border-radius:10px;
+    padding:18px;
+    min-height:0;
+  }
+  .card h2{
+    margin:0 0 12px;
+    font-size:11px; text-transform:uppercase; letter-spacing:.08em;
+    color:var(--ink-muted); font-weight:600;
+  }
+
+  /* ── Tables ── */
+  table{width:100%; border-collapse:collapse; font-size:13px}
+  th,td{text-align:right; padding:7px 6px; border-bottom:1px solid var(--border-light)}
   th:first-child,td:first-child{text-align:left}
-  th{color:var(--muted);font-weight:600;font-size:11px}
-  td.num{font-family:var(--mono)}
-  .win{color:#4ade80;font-weight:600}
-  .note{color:var(--muted);font-size:11.5px;margin-top:9px;line-height:1.5}
-  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:9px}
-  .kpi{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 10px}
-  .kpi .v{font:600 18px/1.2 var(--mono)}
-  .kpi .l{color:var(--muted);font-size:10.5px;margin-top:2px}
-  .scroll{overflow-y:auto;flex:1;min-height:0}
-  .ring{display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:7px;cursor:pointer;
-    border:1px solid transparent}
-  .ring:hover{background:var(--panel2)}
-  .ring.sel{background:var(--panel2);border-color:var(--accent)}
-  .ring .id{font-family:var(--mono);font-size:12px}
-  .ring .meta{color:var(--muted);font-size:11px}
-  .chip{font-size:10px;padding:2px 7px;border-radius:20px;background:#22283400;
-    border:1px solid var(--line);color:var(--muted);white-space:nowrap}
-  .dot{width:8px;height:8px;border-radius:50%;flex:none}
-  #net{flex:1;min-height:340px;border-radius:8px;background:var(--panel2);
-    border:1px solid var(--line)}
-  .row{display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:12.5px}
-  .row .k{color:var(--muted)}
-  .row .v{font-family:var(--mono);text-align:right}
-  .legend{display:flex;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:11px;margin-top:9px}
-  .legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}
-  .err{color:#fca5a5;font-size:12px}
-  select,input{background:var(--panel2);color:var(--ink);border:1px solid var(--line);
-    border-radius:6px;padding:5px 8px;font:12px var(--font)}
+  th{color:var(--ink-muted); font-weight:600; font-size:11px}
+  td.num{font-family:var(--mono); font-size:12.5px}
+  .win{color:var(--win); font-weight:600}
+  .note{color:var(--ink-muted); font-size:12px; margin-top:10px; line-height:1.6}
+
+  /* ── KPIs ── */
+  .kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(100px,1fr)); gap:10px}
+  .kpi{
+    background:var(--surface2);
+    border:1px solid var(--border-light);
+    border-radius:8px; padding:10px 12px;
+  }
+  .kpi .v{font:600 18px/1.2 var(--mono); color:var(--ink)}
+  .kpi .l{color:var(--ink-muted); font-size:10.5px; margin-top:3px}
+
+  /* ── Ring list ── */
+  .scroll{overflow-y:auto; flex:1; min-height:0}
+  .ring{
+    display:flex; align-items:center; gap:10px;
+    padding:9px 10px; border-radius:8px;
+    cursor:pointer; border:1px solid transparent;
+    transition:background .15s, border-color .15s;
+  }
+  .ring:hover{background:var(--surface2)}
+  .ring.sel{background:var(--surface2); border-color:var(--accent)}
+  .ring .id{font-family:var(--mono); font-size:12.5px; font-weight:500; color:var(--ink)}
+  .ring .meta{color:var(--ink-muted); font-size:11.5px}
+  .chip{
+    font-size:10px; padding:2px 8px; border-radius:5px;
+    background:var(--badge-bg); border:1px solid var(--badge-border);
+    color:var(--badge-text); white-space:nowrap; font-weight:500;
+  }
+  .dot{width:9px; height:9px; border-radius:50%; flex:none}
+
+  /* ── Graph ── */
+  #net{
+    flex:1; min-height:340px;
+    border-radius:8px;
+    background:var(--surface2);
+    border:1px solid var(--border-light);
+  }
+
+  /* ── Misc ── */
+  .row{display:flex; justify-content:space-between; gap:10px; padding:5px 0; font-size:13px}
+  .row .k{color:var(--ink-muted)}
+  .row .v{font-family:var(--mono); text-align:right; font-size:12.5px}
+  .legend{display:flex; gap:14px; flex-wrap:wrap; color:var(--ink-muted); font-size:11px; margin-top:10px}
+  .legend i{display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; vertical-align:middle}
+  .err{color:var(--risk-hi); font-size:12.5px}
+  select,input{
+    background:var(--surface);
+    color:var(--ink); border:1px solid var(--border);
+    border-radius:6px; padding:5px 10px;
+    font:12.5px var(--font);
+    cursor:pointer;
+  }
+  select:focus,input:focus{outline:2px solid var(--accent); outline-offset:-1px}
+
+  /* ── Scrollbar ── */
+  .scroll::-webkit-scrollbar{width:5px}
+  .scroll::-webkit-scrollbar-track{background:transparent}
+  .scroll::-webkit-scrollbar-thumb{background:var(--border); border-radius:4px}
+  .scroll::-webkit-scrollbar-thumb:hover{background:var(--ink-muted)}
 </style>
 </head>
 <body>
 <header>
   <h1>RingWatch</h1>
   <span class="sub">Abuse-ring sentinel · Razorpay AI Buildathon Track 02</span>
-  <span class="badge">ADVISORY ONLY · FLAGS &amp; EXPLAINS, NEVER ACTS</span>
+  <span class="badge">Advisory only · flags &amp; explains, never acts</span>
 </header>
 
 <main>
@@ -101,16 +185,16 @@
       <h2 id="graphtitle">Select a ring to view its transaction graph</h2>
       <div id="net"></div>
       <div class="legend">
-        <span><i style="background:#ef4444"></i>source</span>
-        <span><i style="background:#f59e0b"></i>intermediary</span>
-        <span><i style="background:#4f9cf9"></i>sink</span>
-        <span><i style="background:#6b7280"></i>peripheral</span>
+        <span><i style="background:#b5423a"></i>source</span>
+        <span><i style="background:#c4873a"></i>intermediary</span>
+        <span><i style="background:#4a7a9a"></i>sink</span>
+        <span><i style="background:#8a7f6e"></i>peripheral</span>
         <span>· thicker/redder edge = higher risk score · dashed = not laundering in ground truth</span>
       </div>
     </div>
     <div class="card" id="detail" style="max-height:32vh;overflow:auto">
       <h2>Audit trail</h2>
-      <div class="sub" style="color:var(--muted)">
+      <div class="sub" style="color:var(--ink-muted)">
         Pick a ring on the left to see its accounts, transactions, and why it was flagged.
       </div>
     </div>
@@ -123,8 +207,8 @@ const API = location.port === "5500" || location.protocol === "file:"
 const $ = id => document.getElementById(id);
 const fmt = (n, d = 0) => Number(n).toLocaleString(undefined,
   {minimumFractionDigits: d, maximumFractionDigits: d});
-const riskColor = r => r >= .9 ? "#ef4444" : r >= .7 ? "#f59e0b" : "#22c55e";
-const roleColor = {source:"#ef4444", intermediary:"#f59e0b", sink:"#4f9cf9", peripheral:"#6b7280"};
+const riskColor = r => r >= .9 ? "#b5423a" : r >= .7 ? "#c4873a" : "#4a8c5c";
+const roleColor = {source:"#b5423a", intermediary:"#c4873a", sink:"#4a7a9a", peripheral:"#8a7f6e"};
 
 let RINGS = [], selected = null, network = null;
 
@@ -211,8 +295,8 @@ async function selectRing(id){
   $("graphtitle").textContent = `${id} — ${g.detected_typology} · ${g.nodes.length} accounts · ${g.edges.length} flagged transactions`;
   const nodes = g.nodes.map(n => ({
     id: n.id, label: n.label, title: `${n.id} (${n.role})`,
-    color: {background: roleColor[n.role] || "#6b7280", border: "#0f1115"},
-    font: {color: "#e6e9ef", size: 11}, size: n.role === "peripheral" ? 8 : 13
+    color: {background: roleColor[n.role] || "#8a7f6e", border: "#faf7f2"},
+    font: {color: "#2c2416", size: 11}, size: n.role === "peripheral" ? 8 : 13
   }));
   const edges = g.edges.map(e => ({
     from: e.from, to: e.to, arrows: "to",
@@ -239,7 +323,7 @@ async function selectRing(id){
     <div class="row"><span class="k">Total flagged amount</span><span class="v">$${fmt(ex.total_amount, 2)}</span></div>
     <div class="row"><span class="k">Roles</span><span class="v">${Object.entries(roles).map(([k, v]) => k + " " + v).join(" · ")}</span></div>
     <div class="row"><span class="k">Ground truth in shown edges</span><span class="v">${truth}/${ex.edges.length} laundering</span></div>
-    <table style="margin-top:9px"><thead><tr><th>From</th><th>To</th><th>Amount</th><th>Risk</th><th>Truth</th></tr></thead><tbody>
+    <table style="margin-top:10px"><thead><tr><th>From</th><th>To</th><th>Amount</th><th>Risk</th><th>Truth</th></tr></thead><tbody>
       ${ex.edges.slice(0, 25).map(e => `<tr>
         <td class="num" style="font-size:11px">${e.from_account}</td>
         <td class="num" style="font-size:11px">${e.to_account}</td>
