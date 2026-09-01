@@ -1,0 +1,38 @@
+# --- Data (Kaggle CSVs are downloaded manually; never commit them) ---
+data/
+*.csv
+*.parquet
+*.pt
+*.pth
+*.pkl
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+ENV/
+.conda/
+
+# --- Secrets / local config ---
+.env
+.env.*
+!.env.example
+kaggle.json
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# --- Editors / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Run artifacts ---
+models/
+artifacts/
+logs/

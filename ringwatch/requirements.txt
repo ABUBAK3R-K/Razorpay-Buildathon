@@ -1,0 +1,31 @@
+# RingWatch — Track 02 (AI Risk Manager), Razorpay AI Buildathon
+# Python 3.10+ recommended.
+#
+# NOTE on torch_geometric: install torch FIRST, then torch_geometric, so PyG
+# resolves against the correct torch/CUDA build. See README "Setup".
+
+# --- Graph + GNN ---
+torch>=2.2
+torch_geometric>=2.5
+
+# --- Tabular baseline ---
+xgboost>=2.0
+lightgbm>=4.3
+
+# --- Graph ops / community detection ---
+networkx>=3.2
+python-louvain>=0.16
+
+# --- Data / classical ML ---
+pandas>=2.2
+numpy>=1.26
+scikit-learn>=1.4
+
+# --- Serving API ---
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.6
+
+# --- Audit-log storage (PostgreSQL) ---
+psycopg2-binary>=2.9
+SQLAlchemy>=2.0
