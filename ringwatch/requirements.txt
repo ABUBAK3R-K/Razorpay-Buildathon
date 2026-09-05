@@ -1,5 +1,10 @@
 # RingWatch — Track 02 (AI Risk Manager), Razorpay AI Buildathon
-# Python 3.10+ recommended.
+# Python 3.10+ recommended (developed and verified on 3.13).
+#
+# This is the FULL stack: training, ring extraction, evaluation and serving.
+# To deploy the API only, use requirements-serve.txt instead - it drops torch,
+# torch_geometric, lightgbm, networkx and python-louvain, none of which the
+# serving path imports.
 #
 # NOTE on torch_geometric: install torch FIRST, then torch_geometric, so PyG
 # resolves against the correct torch/CUDA build. See README "Setup".
@@ -9,7 +14,7 @@ torch>=2.2
 torch_geometric>=2.5
 
 # --- Tabular baseline ---
-xgboost>=2.0
+xgboost>=3.0,<4        # majors matter: baseline.pkl was trained on 3.x
 lightgbm>=4.3
 
 # --- Graph ops / community detection ---
@@ -17,8 +22,8 @@ networkx>=3.2
 python-louvain>=0.16
 
 # --- Data / classical ML ---
-pandas>=2.2
-numpy>=1.26
+pandas>=2.2,<4
+numpy>=2.0,<3          # NumPy 1.x cannot unpickle 2.x arrays (graph.pkl, *.npz)
 scikit-learn>=1.4
 
 # --- Serving API ---
@@ -26,6 +31,8 @@ fastapi>=0.110
 uvicorn[standard]>=0.29
 pydantic>=2.6
 
-# --- Audit-log storage (PostgreSQL) ---
-psycopg2-binary>=2.9
-SQLAlchemy>=2.0
+# --- Audit-log storage ---
+# SQLAlchemy is required; the audit trail falls back to SQLite and then JSONL,
+# so psycopg2 is only needed when DATABASE_URL points at PostgreSQL.
+SQLAlchemy>=2.0,<3
+# psycopg2-binary>=2.9

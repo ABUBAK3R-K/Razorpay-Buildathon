@@ -124,6 +124,52 @@ branch `main`, folder `/ (root)`. It then serves at
 
 ---
 
+## Deployment
+
+**The landing page deploys anywhere; the API does not deploy from a clone alone.**
+
+`docs/index.html` is a single self-contained file with one real ring baked in. It needs no API, no
+build step and no server — GitHub Pages, Netlify, or a double-click all work.
+
+The API is the constrained half, for one reason: **`data/` is gitignored, so a fresh clone has no
+artifacts.** `graph.pkl` (85 MB), `baseline.pkl`, `gnn.pt`, `rings.json` and the two `.npz` score
+files total ~91 MB and are produced by the pipeline, not committed. A clone starts cleanly — every
+load is wrapped and failures are reported in `/health` under `load_errors` — but `/rings` will be
+empty until those files are present. Any host must either run the pipeline (which needs the Kaggle
+dataset) or receive `data/` out of band.
+
+### Serving does not need torch
+
+The serving path imports NumPy, pandas, XGBoost, scikit-learn, FastAPI and SQLAlchemy — and nothing
+else. `graph.pkl` is pure NumPy/pandas, `rings.json` is JSON, and the per-edge scores are `.npz`.
+`torch` and `torch_geometric` are needed *only* to load `gnn.pt` for scoring a brand-new
+transaction; the GNN's already-computed scores are served from `scores_gnn.npz` without it.
+
+Verified with torch, PyG and lightgbm blocked at import: `/metrics`, `/rings`,
+`/rings/{id}/explain`, `/rings/{id}/graph`, `/dashboard/` and `POST /score/transaction` all return
+200, the console renders identically, and `/health` reports `gnn_loaded: false` with the reason.
+
+```bash
+pip install -r requirements-serve.txt
+uvicorn src.api.main:app --host 0.0.0.0 --port ${PORT:-8000}
+```
+
+That drops the single biggest install risk — the torch/PyG pair, which is multiple GB and has to be
+resolved against a matching CUDA build.
+
+### Constraints to plan around
+
+| Constraint | Detail |
+|---|---|
+| Artifacts not in git | ~91 MB under `data/`, gitignored. Ship them separately or run the pipeline. |
+| Memory | ~450 MB RSS once `graph.pkl` is expanded (492,163 edges x 31 features). A 512 MB tier is too tight; give it 1 GB. |
+| Cold start | The graph unpickles at startup, so first boot takes seconds, not milliseconds. Avoid scale-to-zero. |
+| Pickle compatibility | Artifacts were written with NumPy 2.x / XGBoost 3.x. NumPy 1.x **cannot** read them. The pins in both requirements files enforce this. |
+| Dataset | IBM AML (AMLWorld) needs a Kaggle account, so the pipeline is not reproducible unattended. |
+| Console on a static host | `dashboard/index.html` calls the API on its own origin. Served from GitHub Pages with no API behind it, it shows its "API is not answering" screen by design. Deploy it with the API, or point a reverse proxy at both. |
+
+---
+
 ## Repo layout
 
 ```
@@ -131,7 +177,8 @@ ringwatch/
 ├── README.md
 ├── PRD.md                  # scope, metrics, guardrails
 ├── design.md               # technical plan
-├── requirements.txt
+├── requirements.txt        # full stack (training + serving)
+├── requirements-serve.txt  # API only - no torch/PyG
 ├── data/                   # gitignored — Kaggle CSVs go here
 ├── src/
 │   ├── data/               # download instructions + graph construction

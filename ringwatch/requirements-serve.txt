@@ -1,0 +1,30 @@
+# RingWatch — serving only.
+#
+# The API needs none of the training stack. graph.pkl is pure NumPy/pandas,
+# rings.json is JSON, and the per-edge scores are .npz — so torch and
+# torch_geometric are only needed to load gnn.pt for scoring a brand-new
+# transaction through the GNN. Without them the app starts, reports
+# {"gnn": "..."} in /health load_errors, and serves every endpoint from the
+# XGBoost path, which is what the single-transaction route already used.
+#
+#   pip install -r requirements-serve.txt
+#   uvicorn src.api.main:app --host 0.0.0.0 --port ${PORT:-8000}
+#
+# Lower bounds are NOT cosmetic. The committed artifacts were pickled with
+# NumPy 2.x and XGBoost 3.x; NumPy 1.x cannot unpickle a NumPy 2.x array
+# (it looks for numpy._core and fails), so an unpinned install is a
+# deployment-time crash, not a warning.
+
+fastapi>=0.110,<1
+uvicorn[standard]>=0.29,<1
+pydantic>=2.6,<3
+
+numpy>=2.0,<3          # must match the major used to write the .pkl/.npz
+pandas>=2.2,<4         # graph.pkl carries a pandas.Timestamp
+scikit-learn>=1.4,<2   # required to unpickle the XGBClassifier in baseline.pkl
+xgboost>=3.0,<4        # must match the major that trained baseline.pkl
+
+SQLAlchemy>=2.0,<3     # audit trail; falls back to SQLite, then JSONL
+
+# Only if DATABASE_URL points at PostgreSQL:
+# psycopg2-binary>=2.9
