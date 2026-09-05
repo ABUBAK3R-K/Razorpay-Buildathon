@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RingWatch — graph-native detection for coordinated fraud rings</title>
+<meta name="description" content="RingWatch scores a transaction network as a graph, extracts coordinated fraud rings by community detection, and benchmarks itself honestly against a tabular baseline. Advisory only.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.9/dist/vis-network.min.js"></script>
+<style>
+:root{
+  /* Same palette as the console. Risk reads as contrast against the ground,
+     so it inverts cleanly between the dark and light halves of this page. */
+  --abyss:#12161C;
+  --slate:#1B212A;
+  --hair-d:#2A313B;
+  --text-d:#D6DAE0;
+  --text-d2:#8A93A0;
+  --text-d3:#7F8895;
+
+  --chalk:#F2F3F5;
+  --hair-l:#D7DBE0;
+  --ink:#0E1218;
+  --ink-2:#4A535F;
+  --ink-3:#626B77;
+
+  --filament:#FFEAD1;
+  --amber:#E8A33C;
+  --amber-l:#9A6410;
+  --teal:#3FB0A0;
+  --teal-l:#17685C;
+  --dim:#4A535F;
+
+  --sans:'Archivo',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --mono:'IBM Plex Mono','SF Mono',Menlo,Consolas,monospace;
+  --pad:clamp(20px,5vw,72px);
+}
+*{box-sizing:border-box;margin:0}
+[hidden]{display:none!important}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *{animation-duration:.001ms!important;transition-duration:.001ms!important}
+}
+body{
+  background:var(--abyss);color:var(--text-d);
+  font:400 16px/1.6 var(--sans);
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+}
+img,svg{max-width:100%}
+:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+
+/* ── two grounds ─────────────────────────────────────────── */
+.dark{background:var(--abyss);color:var(--text-d)}
+.light{background:var(--chalk);color:var(--ink)}
+.dark a{color:var(--text-d)}
+.light a{color:var(--ink)}
+a{text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px}
+.dark a{text-decoration-color:var(--dim)}
+.light a{text-decoration-color:#AEB5BD}
+.dark a:hover{text-decoration-color:var(--filament)}
+.light a:hover{text-decoration-color:var(--ink)}
+
+section{padding:clamp(56px,9vw,120px) var(--pad)}
+.wrap{max-width:1240px;margin:0 auto}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* ── type scale ──────────────────────────────────────────── */
+h1{font-size:clamp(2rem,4.4vw,3.5rem);font-weight:600;letter-spacing:-.032em;line-height:1.02}
+h2{font-size:clamp(1.55rem,3.1vw,2.35rem);font-weight:600;letter-spacing:-.022em;line-height:1.12}
+h3{font-size:1.05rem;font-weight:600;letter-spacing:-.01em}
+.lede{font-size:clamp(1rem,1.5vw,1.15rem);line-height:1.6;max-width:52ch}
+.body{max-width:46ch;line-height:1.68}
+.dark .body,.dark .lede{color:var(--text-d2)}
+.light .body,.light .lede{color:var(--ink-2)}
+.body p + p{margin-top:1em}
+.note{font-size:.8rem;line-height:1.6}
+.dark .note{color:var(--text-d3)}
+.light .note{color:var(--ink-3)}
+.sep{display:inline-block;width:1px;height:.72em;margin:0 .7em;vertical-align:-.02em}
+.dark .sep{background:var(--hair-d)}
+.light .sep{background:var(--hair-l)}
+
+/* ── nav ─────────────────────────────────────────────────── */
+nav{
+  position:absolute;top:0;left:0;right:0;z-index:3;
+  display:flex;align-items:center;gap:22px;flex-wrap:wrap;
+  padding:22px var(--pad);
+}
+nav .wordmark{font-weight:700;letter-spacing:-.02em;text-decoration:none}
+nav .links{margin-left:auto;display:flex;gap:20px;font-size:.86rem}
+nav .links a{color:var(--text-d2)}
+nav .links a:hover{color:var(--text-d)}
+
+/* ── hero ────────────────────────────────────────────────── */
+#hero{
+  position:relative;min-height:min(100svh,860px);
+  display:grid;grid-template-rows:1fr auto;
+  padding:0;overflow:hidden;
+}
+#hero-net{position:absolute;top:0;right:0;bottom:0;left:46%;z-index:1}
+#hero-copy{
+  position:relative;z-index:2;grid-row:2;
+  padding:0 var(--pad) clamp(36px,6vw,64px);
+  max-width:min(760px,92%);
+}
+#hero h1{margin-bottom:20px;max-width:15ch}
+#hero .lede{color:var(--text-d2)}
+#hero-caption{
+  position:absolute;z-index:2;right:var(--pad);bottom:clamp(28px,5vw,52px);
+  max-width:min(420px,44vw);text-align:right;
+  font-size:.75rem;line-height:1.7;color:var(--text-d3);font-family:var(--mono);
+}
+/* keep the headline legible over the graph without a gradient wash on the whole hero */
+#hero::after{
+  content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:linear-gradient(to right,var(--abyss) 40%,rgba(18,22,28,.72) 54%,transparent 72%);
+}
+@media (max-width:900px){
+  #hero{min-height:0;grid-template-rows:auto auto;padding-top:70px}
+  #hero-net{position:relative;left:auto;right:auto;top:auto;bottom:auto;
+            grid-row:1;height:clamp(280px,42vh,380px)}
+  #hero::after{background:linear-gradient(to top,var(--abyss) 8%,transparent 34%)}
+  #hero-caption{position:static;grid-row:2;text-align:left;padding:10px var(--pad) 0;max-width:none}
+  #hero-copy{grid-row:3;padding-top:14px}
+  nav{gap:10px 18px}
+}
+.cta{display:flex;gap:10px;flex-wrap:wrap;margin-top:26px}
+.btn{
+  border:1px solid var(--hair-d);border-radius:3px;
+  padding:9px 15px;font-size:.88rem;text-decoration:none;color:var(--text-d);
+}
+.btn:hover{border-color:var(--dim);background:var(--slate)}
+.btn.primary{background:var(--filament);color:var(--abyss);border-color:var(--filament);font-weight:500}
+.btn.primary:hover{background:#fff;border-color:#fff}
+
+/* ── generic split layout ────────────────────────────────── */
+.split{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,11fr);gap:clamp(28px,5vw,72px);align-items:start}
+@media (max-width:900px){.split{grid-template-columns:1fr}}
+.head{margin-bottom:22px}
+.head h2{margin-bottom:14px}
+
+/* ── exhibit (ledger / network toggle) ───────────────────── */
+.exhibit{border:1px solid var(--hair-l);border-radius:3px;background:#fff;overflow:hidden}
+.exhibit-bar{display:flex;align-items:center;gap:4px;padding:8px 10px;border-bottom:1px solid var(--hair-l)}
+.seg{padding:5px 11px;font-size:.8rem;border-radius:3px;color:var(--ink-3)}
+.seg[aria-pressed=true]{background:var(--ink);color:var(--chalk)}
+.seg:hover[aria-pressed=false]{background:#E8EAED;color:var(--ink)}
+.exhibit-bar .tag{margin-left:auto;font-size:.72rem;color:var(--ink-3);font-family:var(--mono)}
+.view{min-height:396px}
+.view[hidden]{display:none}
+#ledger{overflow-x:auto}
+#exhibit-net{height:396px;background:#FAFBFC}
+
+table{width:100%;border-collapse:collapse;font-size:.82rem}
+th{
+  text-align:right;font-weight:600;font-size:.72rem;padding:9px 12px;
+  border-bottom:1px solid var(--hair-l);white-space:nowrap;color:var(--ink-3);
+}
+th:first-child{text-align:left}
+td{text-align:right;padding:7px 12px;border-bottom:1px solid #EAECEF;white-space:nowrap}
+td:first-child{text-align:left}
+td.acct{font-family:var(--mono);font-size:.76rem;color:var(--ink-2)}
+td.n{font-family:var(--mono);font-variant-numeric:tabular-nums}
+tbody tr:last-child td{border-bottom:0}
+
+/* ── pipeline ────────────────────────────────────────────── */
+.stages{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--hair-d);border:1px solid var(--hair-d);border-radius:3px;margin-top:38px}
+@media (max-width:820px){.stages{grid-template-columns:1fr}}
+.stage{background:var(--abyss);padding:24px}
+.stage .n{font-family:var(--mono);font-size:.76rem;color:var(--text-d3);margin-bottom:14px}
+.stage h3{margin-bottom:10px}
+.stage p{font-size:.92rem;line-height:1.62;color:var(--text-d2)}
+details{margin-top:16px;border-top:1px solid var(--hair-d);padding-top:12px}
+summary{font-size:.82rem;color:var(--text-d3);cursor:pointer;list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"+ ";font-family:var(--mono)}
+details[open] summary::before{content:"\2212 "}
+summary:hover{color:var(--text-d)}
+details dl{display:grid;grid-template-columns:auto 1fr;gap:5px 16px;margin-top:12px;font-size:.78rem}
+details dt{color:var(--text-d3)}
+details dd{margin:0;text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--text-d2)}
+
+/* ── evidence ────────────────────────────────────────────── */
+.results{width:100%;border-collapse:collapse;font-size:.92rem;margin-top:8px}
+.results th{font-size:.78rem;padding:10px 14px}
+.results td{padding:11px 14px;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.results td:first-child{font-family:var(--sans);color:var(--ink-2)}
+.results .lead{color:var(--ink);font-weight:500}
+.results .trail{color:#9AA2AC}
+.results tbody tr:last-child td{border-bottom:1px solid var(--hair-l)}
+.recovery{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--hair-l);border:1px solid var(--hair-l);margin-top:34px}
+.rec{background:var(--chalk);padding:16px 18px}
+.rec .v{font-family:var(--mono);font-size:1.5rem;letter-spacing:-.02em}
+.rec .l{font-size:.78rem;color:var(--ink-3);margin-top:5px;line-height:1.45}
+
+/* ── guardrails ──────────────────────────────────────────── */
+.clauses{border-top:1px solid var(--hair-d);margin-top:30px}
+.clause{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:clamp(16px,3vw,44px);
+  padding:22px 0;border-bottom:1px solid var(--hair-d)}
+@media (max-width:760px){.clause{grid-template-columns:1fr;gap:8px}}
+.clause h3{font-weight:500}
+.clause p{font-size:.92rem;line-height:1.62;color:var(--text-d2)}
+.contract{
+  font-family:var(--mono);font-size:.8rem;line-height:1.75;
+  background:var(--slate);border:1px solid var(--hair-d);border-radius:3px;
+  padding:16px 18px;margin-top:26px;overflow-x:auto;color:var(--text-d2);
+}
+.contract b{color:var(--filament);font-weight:400}
+
+/* ── footer ──────────────────────────────────────────────── */
+footer{padding:44px var(--pad) 56px;border-top:1px solid var(--hair-d)}
+.foot{display:flex;gap:28px 40px;flex-wrap:wrap;align-items:baseline}
+.foot .links{display:flex;gap:24px;flex-wrap:wrap;font-size:.9rem}
+.foot .note{margin-left:auto;max-width:44ch}
+@media (max-width:700px){.foot .note{margin-left:0}}
+</style>
+</head>
+<body>
+
+<!-- ── hero ─────────────────────────────────────────────── -->
+<section id="hero" class="dark">
+  <nav>
+    <a class="wordmark" href="#hero">RingWatch</a>
+    <span class="links">
+      <a href="#blindspot">The blind spot</a>
+      <a href="#pipeline">How it works</a>
+      <a href="#evidence">Results</a>
+      <a href="#guardrails">Guardrails</a>
+      <a href="https://github.com/ABUBAK3R-K/Razorpay-Buildathon">GitHub</a>
+    </span>
+  </nav>
+
+  <div id="hero-net" aria-hidden="true"></div>
+  <p id="hero-caption">
+    ring_00168<span class="sep"></span>CYCLE<span class="sep"></span>10 accounts<span class="sep"></span>13 transactions<span class="sep"></span>$164,242.78
+  </p>
+
+  <div id="hero-copy">
+    <h1>Fraud rings do not look like fraud one transaction at a time.</h1>
+    <p class="lede">
+      A per-transaction scorer can flag all thirteen of these transfers and still never tell you
+      they are one thing. RingWatch reads the transaction network as a graph, extracts the ring,
+      and names the shape: ten accounts, one closed cycle, $164,242.78 going around it.
+    </p>
+    <div class="cta">
+      <a class="btn primary" href="../dashboard/index.html">Open the console</a>
+      <a class="btn" href="https://github.com/ABUBAK3R-K/Razorpay-Buildathon">Read the code</a>
+    </div>
+    <p class="note" style="margin-top:18px">
+      Razorpay AI Buildathon, Track 02 — AI Risk Manager. Advisory only: RingWatch flags and
+      explains, and cannot block, freeze, or reverse anything.
+    </p>
+  </div>
+</section>
+
+<!-- ── the blind spot ───────────────────────────────────── -->
+<section id="blindspot" class="light">
+  <div class="wrap split">
+    <div>
+      <div class="head">
+        <h2>A ledger hides what a graph shows.</h2>
+      </div>
+      <div class="body">
+        <p>
+          A per-transaction model scores the thirteen rows on the right one at a time. It can
+          score every one of them highly — these are scored 0.9455 to 0.9968 — and still hand a
+          reviewer thirteen separate alerts: thirteen counterparty pairs to chase, with nothing
+          said about how they relate to each other.
+        </p>
+        <p>
+          Sort by counterparty instead of by amount and the structure appears. The ten accounts
+          form exactly one closed cycle, and the same sum keeps travelling it — $16,435.08 on
+          three separate hops, $16,465.55 on two more. The money is going around the loop rather
+          than through the economy.
+        </p>
+        <p>
+          That is the difference between an alert and a case. The extraction stage takes a scored
+          edge set and returns the ring itself — its members, their roles, its shape, and the
+          total that moved — which is the unit a reviewer can actually work. Mule networks,
+          layering chains and circular collusion all share that property: the participants are
+          individually unremarkable by construction, because staying unremarkable is the point.
+        </p>
+      </div>
+      <p class="note" style="margin-top:24px">
+        These are real rows from the held-out split, served by
+        <span class="mono">GET /rings/ring_00168/explain</span>. Edge risk is the per-transaction
+        scorer's own output. Account identifiers are shown without their bank prefix.
+      </p>
+    </div>
+
+    <figure class="exhibit" style="margin:0">
+      <figcaption class="exhibit-bar">
+        <button class="seg" id="seg-ledger" aria-pressed="true" aria-controls="ledger">Ledger</button>
+        <button class="seg" id="seg-network" aria-pressed="false" aria-controls="exhibit-net">Network</button>
+        <span class="tag">ring_00168</span>
+      </figcaption>
+      <div class="view" id="ledger">
+        <table>
+          <thead><tr><th>From</th><th>To</th><th>Amount</th><th>Edge risk</th></tr></thead>
+          <tbody id="ledger-rows"></tbody>
+        </table>
+      </div>
+      <div class="view" id="exhibit-net" hidden></div>
+    </figure>
+  </div>
+</section>
+
+<!-- ── pipeline ─────────────────────────────────────────── -->
+<section id="pipeline" class="dark">
+  <div class="wrap">
+    <div class="head" style="max-width:56ch">
+      <h2>Three stages, and a baseline that gets to win.</h2>
+      <p class="lede">
+        RingWatch models 492,163 transactions between 100,572 accounts as a directed multigraph,
+        then runs the same edge set through three stages.
+      </p>
+    </div>
+
+    <div class="stages">
+      <div class="stage">
+        <div class="n">Stage 1</div>
+        <h3>Score the relationships</h3>
+        <p>
+          An edge-featured graph network scores every transaction with its neighbourhood in
+          view, so an account is judged by the company it keeps as well as by its own numbers.
+        </p>
+        <details>
+          <summary>Architecture</summary>
+          <dl>
+            <dt>Model</dt><dd>GINE</dd>
+            <dt>Task</dt><dd>edge classification</dd>
+            <dt>Hidden dim / layers</dt><dd>64 / 2</dd>
+            <dt>Dropout</dt><dd>0.2</dd>
+            <dt>Epochs</dt><dd>30</dd>
+            <dt>Split</dt><dd>time-based</dd>
+          </dl>
+        </details>
+      </div>
+
+      <div class="stage">
+        <div class="n">Stage 2</div>
+        <h3>Extract the rings</h3>
+        <p>
+          Louvain community detection runs over the high-risk subgraph, isolating candidate
+          rings. Each one is classified by shape — fan-out, fan-in, cycle, or gather-scatter —
+          from the in- and out-degree pattern of its accounts.
+        </p>
+        <details>
+          <summary>Extraction settings</summary>
+          <dl>
+            <dt>Method</dt><dd>louvain</dd>
+            <dt>Edge risk threshold</dt><dd>0.80</dd>
+            <dt>Candidate rings</dt><dd>663</dd>
+            <dt>Min overlap to match</dt><dd>0.30</dd>
+          </dl>
+        </details>
+      </div>
+
+      <div class="stage">
+        <div class="n">Stage 3</div>
+        <h3>Benchmark it honestly</h3>
+        <p>
+          An XGBoost tabular model is trained on the same time-based split and scored on the
+          same held-out data, under a cost model that prices false positives against missed
+          fraud. It is allowed to beat the graph model, and on two measures it does.
+        </p>
+        <details>
+          <summary>Cost model</summary>
+          <dl>
+            <dt>False positive</dt><dd>$5</dd>
+            <dt>False negative</dt><dd>$500</dd>
+            <dt>Do nothing</dt><dd>$1,018,000</dd>
+            <dt>Positives in split</dt><dd>2,036</dd>
+          </dl>
+        </details>
+      </div>
+    </div>
+
+    <p class="note" style="margin-top:22px;max-width:76ch">
+      Ring extraction operates on whichever scored edge set it is given. In the artifact shipped
+      here that is the tabular scorer's output — the graph stage is what converts per-edge scores
+      into ring-level structure, not what produced the scores themselves.
+    </p>
+  </div>
+</section>
+
+<!-- ── evidence ─────────────────────────────────────────── -->
+<section id="evidence" class="light">
+  <div class="wrap split">
+    <div>
+      <div class="head">
+        <h2>Neither model wins outright.</h2>
+      </div>
+      <div class="body">
+        <p>
+          The tabular baseline is the better transaction scorer. It has half again the PR-AUC
+          and it costs $80,355 less to run at its own cost-optimal threshold. Reporting that is
+          not a hedge — a risk product that only shows the chart where it wins has told you
+          nothing about the chart where it loses.
+        </p>
+        <p>
+          What the graph model buys is recall and structure. It recovers 98.04% of laundering
+          transactions against the baseline's 90.86%, and the community-detection stage that
+          runs on top of a scored edge set is the only part of this system that produces a ring
+          an analyst can open, read, and route for review as a single case.
+        </p>
+      </div>
+    </div>
+
+    <div>
+      <table class="results">
+        <thead>
+          <tr><th>Held-out split</th><th>XGBoost (tabular)</th><th>GINE (graph)</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>PR-AUC</td><td class="lead">0.6113</td><td class="trail">0.4052</td></tr>
+          <tr><td>Recall</td><td class="trail">0.9086</td><td class="lead">0.9804</td></tr>
+          <tr><td>Precision</td><td class="lead">0.1438</td><td class="trail">0.0458</td></tr>
+          <tr><td>Net cost</td><td class="lead">$157,315</td><td class="trail">$237,670</td></tr>
+        </tbody>
+      </table>
+      <p class="note" style="margin-top:14px">
+        PR-AUC is threshold-free. Recall, precision and net cost are read at each model's own
+        cost-optimal threshold, not at 0.5. The cost model is illustrative and is not Razorpay
+        figures: $5 per false positive for one manual review, $500 per missed laundering
+        transaction, against 2,036 positives in the split.
+      </p>
+
+      <div class="recovery">
+        <div class="rec"><div class="v">180 / 234</div><div class="l">ground-truth pattern groups recovered by community detection</div></div>
+        <div class="rec"><div class="v">76.9%</div><div class="l">ring recovery rate at 0.30 minimum overlap</div></div>
+        <div class="rec"><div class="v">663</div><div class="l">candidate rings extracted from the high-risk subgraph</div></div>
+      </div>
+      <p class="note" style="margin-top:14px">
+        Recovery by shape: fan-in 88%, gather-scatter 80%, fan-out 77%, random 71%, cycle 70%.
+        538 candidate rings matched no ground-truth group, which is the precision cost of
+        extracting at a 0.80 edge threshold.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ── guardrails ───────────────────────────────────────── -->
+<section id="guardrails" class="dark">
+  <div class="wrap">
+    <div class="head" style="max-width:54ch">
+      <h2>It cannot act. That is a property of the code, not a policy.</h2>
+      <p class="lede">
+        RingWatch is read-only by construction. There is no endpoint that blocks, freezes, holds,
+        or reverses anything, and none can be added without changing what this system is.
+      </p>
+    </div>
+
+    <div class="clauses">
+      <div class="clause">
+        <h3>Advisory output only</h3>
+        <p>
+          Every response is a score plus an explanation. A flagged ring is a case for a human
+          reviewer to open, not an action taken against an account. Nothing in the serving layer
+          is capable of executing an account or transaction action.
+        </p>
+      </div>
+      <div class="clause">
+        <h3>Append-only audit trail</h3>
+        <p>
+          Every score and every ring explanation is written to the audit log — PostgreSQL when
+          <span class="mono">DATABASE_URL</span> is set, SQLite or JSONL otherwise — before it is
+          returned to the caller. A flag that was never logged cannot be served.
+        </p>
+      </div>
+      <div class="clause">
+        <h3>Reviewable reasoning</h3>
+        <p>
+          <span class="mono">GET /rings/{id}/explain</span> returns the accounts and their roles,
+          the contributing transactions with their individual risk scores, the detection method,
+          the model version, and the flag timestamp. The console renders that response verbatim
+          as an audit record.
+        </p>
+      </div>
+      <div class="clause">
+        <h3>Ground truth kept visible</h3>
+        <p>
+          Because this runs against a labelled benchmark, the console shows which flagged
+          transactions were actually laundering and which rings matched no known pattern group.
+          The false positives stay on screen.
+        </p>
+      </div>
+    </div>
+
+    <pre class="contract">GET /health
+
+  "mode":         <b>"advisory-only"</b>
+  "capabilities": <b>["score", "explain"]</b>
+  "cannot":       <b>["block", "freeze", "reverse",
+                   "act on any account or transaction"]</b></pre>
+  </div>
+</section>
+
+<!-- ── footer ───────────────────────────────────────────── -->
+<footer class="dark">
+  <div class="wrap foot">
+    <span class="links">
+      <a href="https://github.com/ABUBAK3R-K/Razorpay-Buildathon">GitHub repository</a>
+      <a href="../dashboard/index.html">Triage console</a>
+      <a href="http://127.0.0.1:8000/docs">API reference</a>
+    </span>
+    <p class="note">
+      The console and the API reference both read from a locally running service — start it with
+      <span class="mono">uvicorn src.api.main:app</span>. Built for the Razorpay AI Buildathon,
+      Track 02.
+    </p>
+  </div>
+</footer>
+
+<script>
+"use strict";
+/* ───────────────────────────────────────────────────────────
+   Static page. The ring below is real output from the held-out
+   split (GET /rings/ring_00168/graph), baked in so this page
+   renders with no API running.
+   ─────────────────────────────────────────────────────────── */
+
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const $ = id => document.getElementById(id);
+const money = n => "$" + Number(n).toLocaleString("en-US", {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+const ACCT = ["8009FD760","800BFED10","8013DB9A0","802125640","80150CB00",
+              "8003A56A0","800463160","8018245C0","801309540","800776AF0"];
+/* [from, to, edge risk, amount] */
+const TX = [
+  [4,8,0.9968,16435.08],[2,5,0.9959,17142.37],[5,9,0.9947,17533.20],
+  [9,7,0.9915,14962.84],[6,0,0.9909,14025.71],[7,3,0.9894,13953.79],
+  [0,2,0.9873,16435.08],[6,0,0.9866, 2056.01],[0,2,0.9765, 1449.60],
+  [1,4,0.9669,16465.55],[3,1,0.9616,16465.55],[1,4,0.9506,  882.90],
+  [8,6,0.9455,16435.08]
+];
+
+/* Risk rides a neutral luminance ramp; hue is reserved for role. On the
+   light exhibit the same rule inverts: high risk goes to ink. */
+function lerp(a, b, t){ return a.map((v, i) => Math.round(v + (b[i] - v) * t)); }
+const norm = r => Math.max(0, Math.min(1, (r - 0.94) / 0.06));
+function riskDark(r){
+  const t = norm(r);
+  return "rgb(" + (t < .5 ? lerp([84, 94, 108], [186, 192, 201], t / .5)
+                          : lerp([186, 192, 201], [255, 234, 209], (t - .5) / .5)).join(",") + ")";
+}
+const riskLight = r => "rgb(" + lerp([176, 183, 191], [14, 18, 24], norm(r)).join(",") + ")";
+
+/* The ring, in cycle order. A force layout renders a cycle as a hairball;
+   laying the ten accounts out in the order money actually travels is the
+   whole finding, so the hero draws it that way and walks the loop once. */
+const CYCLE = [8, 6, 0, 2, 5, 9, 7, 3, 1, 4];
+const R = 210;
+
+function nodeSet(dark){
+  const pos = {};
+  CYCLE.forEach((n, i) => {
+    const a = (i / CYCLE.length) * Math.PI * 2 - Math.PI / 2;
+    pos[ACCT[n]] = {x: Math.cos(a) * R, y: Math.sin(a) * R};
+  });
+  return ACCT.map(a => ({
+    id: a, label: a, x: pos[a].x, y: pos[a].y, fixed: {x: true, y: true},
+    shape: "dot", size: dark ? 12 : 9,
+    color: {background: dark ? "#8A93A0" : "#626B77",
+            border: dark ? "#12161C" : "#FAFBFC",
+            highlight: {background: dark ? "#FFEAD1" : "#0E1218",
+                        border: dark ? "#FFEAD1" : "#0E1218"}},
+    borderWidth: 2,
+    font: {color: dark ? "#7F8895" : "#8B939D", size: dark ? 10.5 : 9.5,
+           face: "IBM Plex Mono", strokeWidth: 0, vadjust: 3}
+  }));
+}
+
+/* Grouped hop by hop around the loop, so the reveal reads as travel. */
+function hops(dark){
+  const out = [], used = new Set();
+  const mk = (t, k, dup) => ({
+    id: k, from: ACCT[t[0]], to: ACCT[t[1]],
+    arrows: {to: {enabled: true, scaleFactor: 0.45}},
+    width: 0.8 + norm(t[2]) * 2.4,
+    color: {color: dark ? riskDark(t[2]) : riskLight(t[2]), opacity: dark ? 0.92 : 0.8},
+    smooth: {type: "curvedCW", roundness: 0.1 + dup * 0.2},
+    title: money(t[3]) + "\nedge risk " + t[2].toFixed(4)
+  });
+  for(let i = 0; i < CYCLE.length; i++){
+    const a = CYCLE[i], b = CYCLE[(i + 1) % CYCLE.length], hop = [];
+    TX.forEach((t, k) => {
+      if(t[0] === a && t[1] === b){ hop.push(mk(t, k, hop.length)); used.add(k); }
+    });
+    if(hop.length) out.push(hop);
+  }
+  const rest = TX.map((t, k) => used.has(k) ? null : mk(t, k, 0)).filter(Boolean);
+  if(rest.length) out.push(rest);
+  return out;
+}
+
+function build(el, dark, animate){
+  const edges = new vis.DataSet([]);
+  const net = new vis.Network(el, {nodes: new vis.DataSet(nodeSet(dark)), edges: edges}, {
+    physics: {enabled: false},
+    interaction: {hover: true, tooltipDelay: 120, dragView: false, zoomView: false,
+                  dragNodes: false, selectable: false, keyboard: false},
+    nodes: {shadow: false}
+  });
+  const loop = hops(dark);
+  net.fit();
+  if(!animate){
+    loop.forEach(hop => edges.add(hop));
+  }else{
+    loop.forEach((hop, i) => setTimeout(() => edges.add(hop), 320 + i * 115));
+  }
+  addEventListener("resize", () => net.fit());
+  return net;
+}
+
+/* hero */
+build($("hero-net"), true, !REDUCED);
+
+/* ledger */
+$("ledger-rows").innerHTML = TX.slice()
+  .sort((a, b) => b[3] - a[3])
+  .map(t =>
+    '<tr><td class="acct">' + ACCT[t[0]] + '</td>' +
+    '<td class="acct">' + ACCT[t[1]] + '</td>' +
+    '<td class="n">' + money(t[3]) + '</td>' +
+    '<td class="n" style="color:' + riskLight(t[2]) + '">' + t[2].toFixed(4) + '</td></tr>')
+  .join("");
+
+/* ledger <-> network toggle */
+let exhibitNet = null;
+function showView(which){
+  const isNet = which === "network";
+  $("seg-ledger").setAttribute("aria-pressed", String(!isNet));
+  $("seg-network").setAttribute("aria-pressed", String(isNet));
+  $("ledger").hidden = isNet;
+  $("exhibit-net").hidden = !isNet;
+  if(isNet && !exhibitNet) exhibitNet = build($("exhibit-net"), false, !REDUCED);
+  else if(isNet && exhibitNet) exhibitNet.fit();
+}
+$("seg-ledger").onclick = () => showView("ledger");
+$("seg-network").onclick = () => showView("network");
+/* deep-link the exhibit view, so ?view=network opens on the reveal */
+if(/[?&]view=network/.test(location.search)) showView("network");
+</script>
+</body>
+</html>

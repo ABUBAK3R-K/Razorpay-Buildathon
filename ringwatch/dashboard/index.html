@@ -3,351 +3,751 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>RingWatch — Abuse-Ring Sentinel</title>
+<title>RingWatch — ring triage console</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.9/dist/vis-network.min.js"></script>
 <style>
-  :root{
-    --bg:#f5f0e8;
-    --surface:#faf7f2;
-    --surface2:#f0ebe0;
-    --border:#e0d8c8;
-    --border-light:#e8e2d4;
-    --ink:#2c2416;
-    --ink-secondary:#5c5343;
-    --ink-muted:#8a7f6e;
-    --accent:#6b5c3e;
-    --accent-light:#8a7a5a;
-    --risk-hi:#b5423a;
-    --risk-mid:#c4873a;
-    --risk-lo:#4a8c5c;
-    --win:#3d7a4f;
-    --badge-bg:#f0e8d4;
-    --badge-border:#d4c8a8;
-    --badge-text:#6b5c3e;
-    --font:'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    --mono:'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
-  }
-  *{box-sizing:border-box; margin:0}
-  html{-webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale}
-  body{background:var(--bg);color:var(--ink);font:14px/1.55 var(--font)}
+:root{
+  /* ground — the graph canvas is the deepest layer, chrome floats above it */
+  --abyss:#12161C;
+  --slate:#1B212A;
+  --raise:#242C36;
+  --hair:#2A313B;
+  --hair-soft:#20262F;
+  /* text stays neutral, because risk is carried by luminance */
+  --text:#D6DAE0;
+  --text-2:#8A93A0;
+  --text-3:#7F8895;
+  /* signal */
+  --filament:#FFEAD1;
+  --amber:#E8A33C;
+  --teal:#3FB0A0;
+  --dim:#4A535F;
+  --sans:'Archivo',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --mono:'IBM Plex Mono','SF Mono',Menlo,Consolas,monospace;
+  --rail-l:320px;
+  --rail-r:380px;
+}
+*{box-sizing:border-box;margin:0}
+/* id-level display rules below outrank the UA sheet's [hidden] rule, so restate it loudly */
+[hidden]{display:none!important}
+html,body{height:100%}
+body{
+  background:var(--abyss);color:var(--text);
+  font:400 14px/1.5 var(--sans);
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+  overflow:hidden;
+}
+:focus-visible{outline:2px solid var(--filament);outline-offset:2px}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+a{color:var(--text);text-decoration-color:var(--dim);text-underline-offset:3px}
+a:hover{text-decoration-color:var(--text-2)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:12px}
 
-  /* ── Header ── */
-  header{
-    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
-    padding:16px 24px;
-    border-bottom:1px solid var(--border);
-    background:var(--surface);
-  }
-  header h1{
-    font-size:18px; font-weight:700; margin:0;
-    color:var(--ink); letter-spacing:-.02em;
-  }
-  .sub{color:var(--ink-muted); font-size:12.5px; font-weight:400}
-  .badge{
-    margin-left:auto;
-    font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase;
-    padding:5px 12px; border-radius:6px;
-    background:var(--badge-bg); color:var(--badge-text);
-    border:1px solid var(--badge-border);
-  }
+/* ── shell ─────────────────────────────────────────────── */
+#app{display:grid;grid-template-rows:41px 1fr;height:100dvh}
 
-  /* ── Layout ── */
-  main{
-    display:grid; grid-template-columns:minmax(300px,400px) 1fr;
-    gap:16px; padding:16px;
-    height:calc(100vh - 58px);
-  }
-  @media(max-width:900px){main{grid-template-columns:1fr; height:auto}}
-  .col{display:flex; flex-direction:column; gap:16px; min-height:0}
+#strip{
+  display:flex;align-items:center;gap:16px;
+  padding:0 14px;background:var(--slate);
+  border-bottom:1px solid var(--hair);
+}
+#strip .wordmark{font-weight:700;font-size:14px;letter-spacing:-.015em}
+#strip .contract{
+  color:var(--text-3);font-size:12.5px;
+  padding-left:16px;border-left:1px solid var(--hair);
+}
+#strip .right{margin-left:auto;display:flex;align-items:center;gap:14px;color:var(--text-3);font-size:12px}
+.health{display:inline-flex;align-items:center;gap:6px}
+.health i{width:6px;height:6px;border-radius:50%;background:var(--dim)}
+.health.up i{background:var(--teal)}
+.health.down i{background:var(--amber)}
 
-  /* ── Cards ── */
-  .card{
-    background:var(--surface);
-    border:1px solid var(--border-light);
-    border-radius:10px;
-    padding:18px;
-    min-height:0;
-  }
-  .card h2{
-    margin:0 0 12px;
-    font-size:11px; text-transform:uppercase; letter-spacing:.08em;
-    color:var(--ink-muted); font-weight:600;
-  }
+main{display:grid;grid-template-columns:var(--rail-l) 1fr var(--rail-r);min-height:0;min-width:0}
+main.wide{grid-template-columns:var(--rail-l) 1fr 0}
+.rail{background:var(--slate);display:flex;flex-direction:column;min-height:0;min-width:0}
+#queue-rail{border-right:1px solid var(--hair)}
+#record-rail{border-left:1px solid var(--hair);overflow:hidden}
+main.wide #record-rail{border-left:0}
 
-  /* ── Tables ── */
-  table{width:100%; border-collapse:collapse; font-size:13px}
-  th,td{text-align:right; padding:7px 6px; border-bottom:1px solid var(--border-light)}
-  th:first-child,td:first-child{text-align:left}
-  th{color:var(--ink-muted); font-weight:600; font-size:11px}
-  td.num{font-family:var(--mono); font-size:12.5px}
-  .win{color:var(--win); font-weight:600}
-  .note{color:var(--ink-muted); font-size:12px; margin-top:10px; line-height:1.6}
+/* ── queue ─────────────────────────────────────────────── */
+.rail-head{
+  display:flex;align-items:baseline;gap:8px;
+  padding:12px 14px 10px;border-bottom:1px solid var(--hair);
+}
+.rail-head h2{font-size:13px;font-weight:600;letter-spacing:-.01em}
+.rail-head .count{color:var(--text-3);font-size:12px;margin-left:auto}
+.controls{display:flex;flex-wrap:wrap;gap:6px;padding:9px 14px;border-bottom:1px solid var(--hair-soft)}
+select,input[type=search]{
+  background:var(--abyss);color:var(--text);
+  border:1px solid var(--hair);border-radius:3px;
+  padding:5px 7px;font:400 12px var(--sans);min-width:0;
+}
+input[type=search]{flex:1 1 100%}
+select{flex:1 1 0;cursor:pointer}
+input[type=search]::placeholder{color:var(--text-3)}
 
-  /* ── KPIs ── */
-  .kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(100px,1fr)); gap:10px}
-  .kpi{
-    background:var(--surface2);
-    border:1px solid var(--border-light);
-    border-radius:8px; padding:10px 12px;
-  }
-  .kpi .v{font:600 18px/1.2 var(--mono); color:var(--ink)}
-  .kpi .l{color:var(--ink-muted); font-size:10.5px; margin-top:3px}
+.scroll{overflow-y:auto;flex:1;min-height:0;scrollbar-width:thin;scrollbar-color:#2A313B transparent}
+.scroll::-webkit-scrollbar{width:9px}
+.scroll::-webkit-scrollbar-thumb{background:var(--hair);border:3px solid var(--slate);border-radius:5px}
 
-  /* ── Ring list ── */
-  .scroll{overflow-y:auto; flex:1; min-height:0}
-  .ring{
-    display:flex; align-items:center; gap:10px;
-    padding:9px 10px; border-radius:8px;
-    cursor:pointer; border:1px solid transparent;
-    transition:background .15s, border-color .15s;
-  }
-  .ring:hover{background:var(--surface2)}
-  .ring.sel{background:var(--surface2); border-color:var(--accent)}
-  .ring .id{font-family:var(--mono); font-size:12.5px; font-weight:500; color:var(--ink)}
-  .ring .meta{color:var(--ink-muted); font-size:11.5px}
-  .chip{
-    font-size:10px; padding:2px 8px; border-radius:5px;
-    background:var(--badge-bg); border:1px solid var(--badge-border);
-    color:var(--badge-text); white-space:nowrap; font-weight:500;
-  }
-  .dot{width:9px; height:9px; border-radius:50%; flex:none}
+.row{
+  display:grid;grid-template-columns:3px 1fr auto;
+  gap:0 10px;width:100%;text-align:left;
+  padding:0;border-bottom:1px solid var(--hair-soft);
+}
+.row:hover{background:var(--raise)}
+.row[aria-current=true]{background:var(--raise)}
+.row[aria-current=true] .bar{box-shadow:inset 0 0 0 1px var(--filament)}
+.row.seen .rid{color:var(--text-2)}
+.bar{grid-column:1;grid-row:1/3;align-self:stretch}
+.row-a{grid-column:2;grid-row:1;padding:9px 0 0;display:flex;align-items:center;gap:7px;min-width:0;overflow:hidden}
+.row-b{grid-column:2;grid-row:2;padding:2px 0 9px;color:var(--text-3);font-size:11.5px;overflow:hidden}
+.rid{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--text)}
+.topo{display:inline-flex;align-items:center;gap:5px;color:var(--text-2);font-size:11.5px;white-space:nowrap}
+.topo svg{flex:none;display:block}
+.row-c{grid-column:3;grid-row:1/3;align-self:center;padding-right:12px;text-align:right;white-space:nowrap}
+.row-c .r{display:block;font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--text)}
+.row-c .c{display:block;font-size:10.5px;color:var(--text-3);margin-top:2px}
+.row-c .c.match{color:var(--teal)}
+.sep{display:inline-block;width:1px;height:9px;background:var(--hair);margin:0 7px;vertical-align:-1px}
+.empty{padding:22px 14px;color:var(--text-3);font-size:12.5px;line-height:1.6}
 
-  /* ── Graph ── */
-  #net{
-    flex:1; min-height:340px;
-    border-radius:8px;
-    background:var(--surface2);
-    border:1px solid var(--border-light);
-  }
+/* ── canvas ────────────────────────────────────────────── */
+#canvas-zone{position:relative;background:var(--abyss);min-width:0;min-height:0}
+#net{position:absolute;inset:0}
+div.vis-tooltip{
+  background:#1B212A!important;border:1px solid #2A313B!important;
+  color:#D6DAE0!important;font:400 11.5px/1.5 'IBM Plex Mono',monospace!important;
+  border-radius:3px!important;padding:6px 8px!important;box-shadow:none!important;
+  white-space:pre!important;
+}
+.overlay{position:absolute;display:flex;gap:6px;align-items:center;pointer-events:none}
+.overlay > *{pointer-events:auto}
+#canvas-head{top:0;left:0;right:0;padding:12px 14px;flex-direction:column;align-items:flex-start;gap:3px}
+#canvas-head h2{font-size:15px;font-weight:600;letter-spacing:-.015em}
+#canvas-head .sub{color:var(--text-3);font-size:12px}
+#canvas-tools{top:11px;right:12px}
+.chip{
+  background:rgba(27,33,42,.82);border:1px solid var(--hair);border-radius:3px;
+  padding:4px 8px;font-size:11.5px;color:var(--text-2);
+  backdrop-filter:blur(4px);
+}
+button.chip:hover{color:var(--text);border-color:var(--dim)}
+#legend{bottom:12px;left:14px;flex-wrap:wrap;max-width:calc(100% - 28px);gap:5px 12px}
+.key{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--text-3)}
+.key .n{width:9px;height:9px;border-radius:50%;flex:none}
+.key .n.hollow{background:none;border:2px solid var(--teal)}
+.key .grad{width:56px;height:4px;border-radius:2px;background:linear-gradient(90deg,#2A313B,#5A6472,#D6DAE0,#FFEAD1)}
+#canvas-blank{
+  position:absolute;inset:0;display:grid;place-content:center;
+  text-align:center;color:var(--text-3);font-size:13px;padding:24px;
+}
 
-  /* ── Misc ── */
-  .row{display:flex; justify-content:space-between; gap:10px; padding:5px 0; font-size:13px}
-  .row .k{color:var(--ink-muted)}
-  .row .v{font-family:var(--mono); text-align:right; font-size:12.5px}
-  .legend{display:flex; gap:14px; flex-wrap:wrap; color:var(--ink-muted); font-size:11px; margin-top:10px}
-  .legend i{display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; vertical-align:middle}
-  .err{color:var(--risk-hi); font-size:12.5px}
-  select,input{
-    background:var(--surface);
-    color:var(--ink); border:1px solid var(--border);
-    border-radius:6px; padding:5px 10px;
-    font:12.5px var(--font);
-    cursor:pointer;
-  }
-  select:focus,input:focus{outline:2px solid var(--accent); outline-offset:-1px}
+/* ── record ────────────────────────────────────────────── */
+.tabs{display:flex;border-bottom:1px solid var(--hair);flex:none}
+.tab{
+  padding:11px 14px;font-size:12.5px;color:var(--text-3);
+  border-bottom:2px solid transparent;margin-bottom:-1px;
+}
+.tab[aria-selected=true]{color:var(--text);border-bottom-color:var(--filament)}
+.tab:hover{color:var(--text-2)}
+.pane{display:none;flex:1;min-height:0;min-width:0;flex-direction:column}
+.pane[data-active]{display:flex}
+.doc{padding:14px;min-width:0}
+.doc-head{border-bottom:1px solid var(--hair);padding-bottom:11px;margin-bottom:12px}
+.doc-head .rid{font-size:14px;font-weight:500}
+.doc-head .meta{color:var(--text-3);font-size:11.5px;margin-top:4px}
+.doc h3{
+  font-size:12px;font-weight:600;color:var(--text-2);
+  margin:18px 0 7px;padding-bottom:5px;border-bottom:1px solid var(--hair-soft);
+}
+.doc h3:first-of-type{margin-top:0}
+.doc p{font-size:12.5px;line-height:1.65;color:var(--text-2)}
+dl.spec{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;font-size:12px}
+dl.spec dt{color:var(--text-3)}
+dl.spec dd{margin:0;text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:11.5px}
+table{width:100%;border-collapse:collapse;font-size:11.5px}
+th{
+  text-align:right;font-weight:600;font-size:10.5px;color:var(--text-3);
+  padding:0 6px 6px 0;border-bottom:1px solid var(--hair);white-space:nowrap;
+}
+th:first-child{text-align:left;padding-left:0}
+td{text-align:right;padding:5px 6px 5px 0;border-bottom:1px solid var(--hair-soft);white-space:nowrap}
+td:first-child{text-align:left;padding-left:0}
+td.acct{font-family:var(--mono);font-size:11px;color:var(--text-2)}
+.tbl{overflow-x:auto;scrollbar-width:thin}
+tr.hit td{background:var(--raise)}
+tr.hit td.acct{color:var(--filament)}
+.roster{display:flex;flex-wrap:wrap;gap:5px}
+.role{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--text-2);
+  border:1px solid var(--hair);border-radius:3px;padding:3px 7px}
+.role i{width:7px;height:7px;border-radius:50%;flex:none}
+.clause{
+  margin-top:20px;padding-top:11px;border-top:1px solid var(--hair);
+  font-size:11.5px;line-height:1.6;color:var(--text-3);
+}
+.clause b{color:var(--text-2);font-weight:600}
+.foot-note{font-size:11px;line-height:1.6;color:var(--text-3);margin-top:9px}
+.foot-note b{color:var(--text-2);font-weight:600}
+.win{color:var(--filament)}
+.loss{color:var(--text-3)}
 
-  /* ── Scrollbar ── */
-  .scroll::-webkit-scrollbar{width:5px}
-  .scroll::-webkit-scrollbar-track{background:transparent}
-  .scroll::-webkit-scrollbar-thumb{background:var(--border); border-radius:4px}
-  .scroll::-webkit-scrollbar-thumb:hover{background:var(--ink-muted)}
+/* ── failure ───────────────────────────────────────────── */
+#down{
+  position:fixed;inset:0;display:grid;place-content:center;
+  background:var(--abyss);padding:32px;z-index:20;
+}
+#down .box{max-width:460px}
+#down h2{font-size:19px;font-weight:600;margin-bottom:10px;letter-spacing:-.015em}
+#down p{color:var(--text-2);font-size:13px;line-height:1.7;margin-bottom:9px}
+#down code{font-family:var(--mono);font-size:12px;color:var(--filament)}
+
+/* ── responsive ────────────────────────────────────────── */
+@media (max-width:1180px){:root{--rail-r:330px;--rail-l:282px}}
+@media (max-width:980px){
+  body{overflow:auto}
+  #app{grid-template-rows:auto 1fr;height:auto;min-height:100dvh}
+  main,main.wide{grid-template-columns:1fr;grid-template-rows:auto 62vh auto}
+  #queue-rail{border-right:0;border-bottom:1px solid var(--hair);max-height:44vh}
+  #record-rail{border-left:0;border-top:1px solid var(--hair)}
+  main.wide #record-rail{display:flex}
+  #strip{flex-wrap:wrap;padding:9px 14px;height:auto;gap:6px 16px}
+  #strip .contract{padding-left:0;border-left:0;flex-basis:100%}
+  #strip .right{margin-left:0}
+  #canvas-tools{display:none}
+}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms!important;transition-duration:.001ms!important}
+}
 </style>
 </head>
 <body>
-<header>
-  <h1>RingWatch</h1>
-  <span class="sub">Abuse-ring sentinel · Razorpay AI Buildathon Track 02</span>
-  <span class="badge">Advisory only · flags &amp; explains, never acts</span>
-</header>
 
-<main>
-  <div class="col">
-    <div class="card">
-      <h2>Baseline vs GNN — held-out split</h2>
-      <table id="metrics"><tbody><tr><td class="sub">loading…</td></tr></tbody></table>
-      <div class="note" id="costnote"></div>
-    </div>
+<div id="app" hidden>
+  <div id="strip">
+    <span class="wordmark">RingWatch</span>
+    <span class="contract">Advisory only — this console flags and explains. It cannot block, freeze, or reverse anything.</span>
+    <span class="right">
+      <span class="health" id="health"><i></i><span id="health-txt">checking API</span></span>
+    </span>
+  </div>
 
-    <div class="card">
-      <h2>Ring-level recovery</h2>
-      <div class="kpis" id="kpis"></div>
-      <table id="typology"><tbody></tbody></table>
-    </div>
-
-    <div class="card" style="display:flex;flex-direction:column;flex:1;min-height:220px">
-      <h2 style="display:flex;align-items:center;gap:8px">
-        Flagged rings <span id="ringcount" class="chip"></span>
-        <select id="filter" style="margin-left:auto">
-          <option value="">all shapes</option>
-          <option>FAN-OUT</option><option>FAN-IN</option>
-          <option>CYCLE</option><option>GATHER-SCATTER</option><option>RANDOM</option>
+  <main id="main">
+    <!-- queue -->
+    <section class="rail" id="queue-rail" aria-label="Ring queue">
+      <div class="rail-head">
+        <h2>Ring queue</h2>
+        <span class="count" id="qcount"></span>
+      </div>
+      <div class="controls">
+        <input type="search" id="q" placeholder="Filter by ring or account id" aria-label="Filter by ring or account id">
+        <select id="topo" aria-label="Filter by topology">
+          <option value="">All shapes</option>
+          <option>FAN-OUT</option><option>FAN-IN</option><option>CYCLE</option>
+          <option>GATHER-SCATTER</option><option>RANDOM</option>
         </select>
-      </h2>
-      <div class="scroll" id="rings"></div>
-    </div>
-  </div>
+        <select id="sort" aria-label="Sort queue">
+          <option value="risk">Risk</option>
+          <option value="txns">Transactions</option>
+          <option value="amount">Amount</option>
+          <option value="size">Accounts</option>
+        </select>
+      </div>
+      <div class="scroll" id="queue" role="list"></div>
+    </section>
 
-  <div class="col">
-    <div class="card" style="display:flex;flex-direction:column;flex:1">
-      <h2 id="graphtitle">Select a ring to view its transaction graph</h2>
+    <!-- canvas -->
+    <section id="canvas-zone" aria-label="Ring transaction graph">
       <div id="net"></div>
-      <div class="legend">
-        <span><i style="background:#b5423a"></i>source</span>
-        <span><i style="background:#c4873a"></i>intermediary</span>
-        <span><i style="background:#4a7a9a"></i>sink</span>
-        <span><i style="background:#8a7f6e"></i>peripheral</span>
-        <span>· thicker/redder edge = higher risk score · dashed = not laundering in ground truth</span>
+      <div id="canvas-blank">Select a ring from the queue to load its transaction graph.</div>
+      <div class="overlay" id="canvas-head" hidden>
+        <h2 id="ctitle"></h2>
+        <span class="sub" id="csub"></span>
       </div>
-    </div>
-    <div class="card" id="detail" style="max-height:32vh;overflow:auto">
-      <h2>Audit trail</h2>
-      <div class="sub" style="color:var(--ink-muted)">
-        Pick a ring on the left to see its accounts, transactions, and why it was flagged.
+      <div class="overlay" id="canvas-tools" hidden>
+        <button class="chip" id="fit">Fit</button>
+        <button class="chip" id="relayout">Re-layout</button>
+        <button class="chip" id="toggle-rail">Hide record</button>
       </div>
-    </div>
+      <div class="overlay" id="legend" hidden>
+        <span class="key"><span class="n" style="background:#E8A33C"></span>source</span>
+        <span class="key"><span class="n" style="background:#8A93A0"></span>intermediary</span>
+        <span class="key"><span class="n hollow"></span>sink</span>
+        <span class="key"><span class="n" style="background:#4A535F"></span>peripheral</span>
+        <span class="key"><span class="grad"></span><span id="ramp-label"></span></span>
+        <span class="key">dashed edge = not laundering in ground truth</span>
+      </div>
+    </section>
+
+    <!-- record -->
+    <section class="rail" id="record-rail" aria-label="Audit record">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tab-record" aria-selected="true" aria-controls="pane-record">Audit record</button>
+        <button class="tab" role="tab" id="tab-model" aria-selected="false" aria-controls="pane-model">Model provenance</button>
+      </div>
+      <div class="pane scroll" id="pane-record" role="tabpanel" aria-labelledby="tab-record" data-active>
+        <div class="doc" id="record"></div>
+      </div>
+      <div class="pane scroll" id="pane-model" role="tabpanel" aria-labelledby="tab-model">
+        <div class="doc" id="model"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="down" hidden>
+  <div class="box">
+    <h2>The RingWatch API is not answering.</h2>
+    <p id="down-detail"></p>
+    <p>Start it from the repo root, then reload this page:</p>
+    <p><code>uvicorn src.api.main:app --reload</code></p>
+    <p style="color:#7F8895">This console is a read-only view over that API. It holds no data of its own.</p>
   </div>
-</main>
+</div>
 
 <script>
-const API = location.port === "5500" || location.protocol === "file:"
+"use strict";
+/* ───────────────────────────────────────────────────────────
+   RingWatch triage console.
+   Read-only view over the FastAPI service. Endpoint contracts
+   are unchanged: /health /metrics /rings /rings/{id}/explain
+   /rings/{id}/graph.
+   ─────────────────────────────────────────────────────────── */
+
+const API = (location.protocol === "file:" || ["5500","5501","3000","8080"].includes(location.port))
   ? "http://127.0.0.1:8000" : "";
 const $ = id => document.getElementById(id);
-const fmt = (n, d = 0) => Number(n).toLocaleString(undefined,
-  {minimumFractionDigits: d, maximumFractionDigits: d});
-const riskColor = r => r >= .9 ? "#b5423a" : r >= .7 ? "#c4873a" : "#4a8c5c";
-const roleColor = {source:"#b5423a", intermediary:"#c4873a", sink:"#4a7a9a", peripheral:"#8a7f6e"};
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-let RINGS = [], selected = null, network = null;
+const fmt = (n, d = 0) => Number(n).toLocaleString("en-US",
+  {minimumFractionDigits: d, maximumFractionDigits: d});
+const money = n => "$" + fmt(n, 2);
+const shortAcct = a => String(a).split(":").pop();
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* risk -> luminance.
+   Risk is continuous, so it rides a neutral brightness ramp; hue is
+   reserved for the categorical thing (account role). The ramp is
+   stretched across the loaded set because every ring here already
+   cleared the extraction threshold — an absolute 0–1 ramp would render
+   the entire queue white. The absolute score is printed beside the bar. */
+const RAMP = [
+  [0.00, [42, 49, 59]],
+  [0.45, [90, 100, 114]],
+  [0.75, [145, 153, 164]],
+  [0.92, [214, 218, 224]],
+  [1.00, [255, 234, 209]]
+];
+function ramp(t){
+  t = Math.max(0, Math.min(1, t));
+  for(let i = 1; i < RAMP.length; i++){
+    if(t <= RAMP[i][0]){
+      const t0 = RAMP[i - 1][0], c0 = RAMP[i - 1][1], t1 = RAMP[i][0], c1 = RAMP[i][1];
+      const k = (t - t0) / (t1 - t0 || 1);
+      return "rgb(" + c0.map((v, j) => Math.round(v + (c1[j] - v) * k)).join(",") + ")";
+    }
+  }
+  return "rgb(255,234,209)";
+}
+let LO = 0, HI = 1;
+const riskT = s => (s - LO) / (HI - LO || 1);
+const riskColor = s => ramp(riskT(s));
+
+const ROLE = {
+  source:       {fill:"#E8A33C", size:15},
+  intermediary: {fill:"#8A93A0", size:10},
+  sink:         {fill:"#12161C", size:15, border:"#3FB0A0"},
+  peripheral:   {fill:"#4A535F", size:6}
+};
+const ROLE_SWATCH = {source:"#E8A33C", intermediary:"#8A93A0", sink:"#3FB0A0", peripheral:"#4A535F"};
+
+/* Topology glyphs are drawn, not just named: the shape is the finding. */
+const GLYPH = {
+  "FAN-OUT":        '<path d="M2 7h4M6 7l6-4M6 7l6 4M6 7h6"/><circle cx="2" cy="7" r="1.6" fill="currentColor" stroke="none"/><circle cx="12.5" cy="3" r="1.2"/><circle cx="12.5" cy="7" r="1.2"/><circle cx="12.5" cy="11" r="1.2"/>',
+  "FAN-IN":         '<path d="M12 7H8M8 7L2 3M8 7l-6 4M8 7H2"/><circle cx="12.4" cy="7" r="1.6" fill="currentColor" stroke="none"/><circle cx="1.5" cy="3" r="1.2"/><circle cx="1.5" cy="7" r="1.2"/><circle cx="1.5" cy="11" r="1.2"/>',
+  "CYCLE":          '<path d="M7 2.6 12.2 9.6H1.8z"/><path d="M9.6 4.9 8.1 3.2l2-.4"/>',
+  "GATHER-SCATTER": '<path d="M2 3.5 6.6 7M2 10.5 6.6 7M8.4 7 12.5 3.5M8.4 7l4.1 3.5"/><circle cx="7.5" cy="7" r="1.6" fill="currentColor" stroke="none"/><circle cx="1.6" cy="3.5" r="1.1"/><circle cx="1.6" cy="10.5" r="1.1"/><circle cx="13" cy="3.5" r="1.1"/><circle cx="13" cy="10.5" r="1.1"/>',
+  "RANDOM":         '<path d="M3 4.2 10.6 6.4M4.4 10.4 10.6 6.4M3 4.2 4.4 10.4"/><circle cx="2.6" cy="3.9" r="1.2"/><circle cx="11" cy="6.5" r="1.2"/><circle cx="4.6" cy="10.7" r="1.2"/>'
+};
+const glyph = t => '<svg width="15" height="14" viewBox="0 0 15 14" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (GLYPH[t] || GLYPH.RANDOM) + '</svg>';
+
+/* ── state ───────────────────────────────────────────────── */
+let RINGS = [], TOTAL = 0, selected = null, network = null;
+const seen = new Set();
+let revealTimers = [];
 
 async function get(path){
   const r = await fetch(API + path);
-  if(!r.ok) throw new Error(path + " -> " + r.status);
+  if(!r.ok) throw new Error(path + " returned " + r.status);
   return r.json();
 }
 
-function renderMetrics(m){
-  const rows = [];
-  const order = [["baseline","Baseline (XGBoost)"],["gnn","GNN (GINE)"]];
-  const present = order.filter(([k]) => m.models[k]);
-  if(!present.length){ $("metrics").innerHTML = "<tbody><tr><td class='err'>No metrics yet — train a model.</td></tr></tbody>"; return; }
+/* ── queue ───────────────────────────────────────────────── */
+function visibleRings(){
+  const q = $("q").value.trim().toLowerCase();
+  const t = $("topo").value;
+  const list = RINGS.filter(r =>
+    (!t || r.detected_typology === t) &&
+    (!q || r.ring_id.toLowerCase().includes(q) || r.accounts.some(a => a.toLowerCase().includes(q))));
+  const by = {
+    risk:   (a, b) => b.mean_risk_score - a.mean_risk_score,
+    txns:   (a, b) => b.n_transactions - a.n_transactions,
+    amount: (a, b) => b.total_amount - a.total_amount,
+    size:   (a, b) => b.size - a.size
+  }[$("sort").value];
+  return list.sort(by);
+}
 
-  const best = Math.max(...present.map(([k]) => m.models[k].metrics.pr_auc));
-  rows.push("<thead><tr><th>Model</th><th>PR-AUC</th><th>P@0.5</th><th>R@0.5</th><th>Net cost</th></tr></thead><tbody>");
-  for(const [k, label] of present){
-    const d = m.models[k], mm = d.metrics, cb = d.cost_at_best;
-    const w = mm.pr_auc === best ? " class='win'" : "";
-    rows.push(`<tr><td>${label}</td>
-      <td class="num"${w}>${mm.pr_auc.toFixed(4)}</td>
-      <td class="num">${mm.precision.toFixed(3)}</td>
-      <td class="num">${mm.recall.toFixed(3)}</td>
-      <td class="num">$${fmt(cb.net_cost)}</td></tr>`);
+function renderQueue(){
+  const list = visibleRings();
+  $("qcount").textContent = list.length === TOTAL
+    ? fmt(list.length) + " rings"
+    : fmt(list.length) + " of " + fmt(TOTAL);
+
+  if(!list.length){
+    $("queue").innerHTML = '<div class="empty">No ring matches this filter.</div>';
+    return;
   }
-  rows.push("</tbody>");
-  $("metrics").innerHTML = rows.join("");
-
-  const any = m.models[present[0][0]];
-  const cm = any.cost_model, cb = any.cost_at_best;
-  $("costnote").innerHTML =
-    `Cost model (illustrative, <b>not</b> Razorpay figures): $${cm.cost_per_false_positive}
-     per false positive (manual review), $${cm.cost_per_false_negative} per missed laundering
-     transaction. Flagging nothing would cost $${fmt(cb.baseline_do_nothing_cost)} on this split.
-     Net cost is reported at each model's cost-optimal threshold, not at 0.5.`;
+  $("queue").innerHTML = list.map(r => {
+    const matched = !!r.matched_pattern_group;
+    return '<button class="row' + (seen.has(r.ring_id) ? " seen" : "") + '" role="listitem"' +
+      ' data-id="' + esc(r.ring_id) + '" aria-current="' + (selected === r.ring_id) + '">' +
+      '<span class="bar" style="background:' + riskColor(r.mean_risk_score) + '"></span>' +
+      '<span class="row-a"><span class="rid">' + esc(r.ring_id) + '</span>' +
+        '<span class="topo">' + glyph(r.detected_typology) + esc(r.detected_typology) + '</span></span>' +
+      '<span class="row-b">' + r.size + ' accounts<span class="sep"></span>' +
+        r.n_transactions + ' transactions<span class="sep"></span>' + money(r.total_amount) + '</span>' +
+      '<span class="row-c"><span class="r">' + r.mean_risk_score.toFixed(3) + '</span>' +
+        '<span class="c' + (matched ? " match" : "") + '">' +
+        (matched ? "corroborated" : "no match") + '</span></span>' +
+      '</button>';
+  }).join("");
 }
 
-function renderRecovery(m){
-  const rec = m.rings && m.rings.recovery;
-  if(!rec || !rec.n_groups){ $("kpis").innerHTML = "<div class='err'>No rings extracted yet.</div>"; return; }
-  $("kpis").innerHTML = `
-    <div class="kpi"><div class="v">${(rec.recovery_rate*100).toFixed(1)}%</div>
-      <div class="l">groups recovered</div></div>
-    <div class="kpi"><div class="v">${rec.n_recovered}/${rec.n_groups}</div>
-      <div class="l">ground-truth rings</div></div>
-    <div class="kpi"><div class="v">${fmt(rec.n_rings)}</div>
-      <div class="l">candidate rings</div></div>
-    <div class="kpi"><div class="v">${fmt(m.graph ? m.graph.n_accounts : 0)}</div>
-      <div class="l">accounts in graph</div></div>`;
+$("queue").addEventListener("click", e => {
+  const row = e.target.closest(".row");
+  if(row) selectRing(row.dataset.id);
+});
+$("queue").addEventListener("keydown", e => {
+  if(e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  const rows = Array.prototype.slice.call($("queue").querySelectorAll(".row"));
+  const i = rows.indexOf(document.activeElement);
+  if(i < 0) return;
+  e.preventDefault();
+  (rows[i + (e.key === "ArrowDown" ? 1 : -1)] || rows[i]).focus();
+});
+["q", "topo", "sort"].forEach(id => $(id).addEventListener("input", renderQueue));
 
-  const t = Object.entries(rec.by_typology || {})
-    .map(([k, v]) => `<tr><td>${k}</td><td class="num">${v.recovered}/${v.total}</td>
-      <td class="num">${(v.recovery_rate*100).toFixed(0)}%</td></tr>`).join("");
-  $("typology").innerHTML =
-    `<thead><tr><th>Typology</th><th>Recovered</th><th>Rate</th></tr></thead><tbody>${t}</tbody>`;
-}
+/* ── graph ───────────────────────────────────────────────── */
+function drawGraph(g){
+  revealTimers.forEach(clearTimeout);
+  revealTimers = [];
+  if(network){ network.destroy(); network = null; }
 
-function renderRings(){
-  const f = $("filter").value;
-  const list = f ? RINGS.filter(r => r.detected_typology === f) : RINGS;
-  $("ringcount").textContent = list.length + " shown";
-  $("rings").innerHTML = list.map(r => `
-    <div class="ring${selected === r.ring_id ? " sel" : ""}" data-id="${r.ring_id}">
-      <span class="dot" style="background:${riskColor(r.mean_risk_score)}"></span>
-      <span class="id">${r.ring_id}</span>
-      <span class="chip">${r.detected_typology}</span>
-      <span class="meta" style="margin-left:auto">${r.size} accts · ${r.n_transactions} txns
-        · ${r.mean_risk_score.toFixed(2)}</span>
-    </div>`).join("");
-  [...$("rings").querySelectorAll(".ring")].forEach(el =>
-    el.onclick = () => selectRing(el.dataset.id));
-}
-
-async function selectRing(id){
-  selected = id;
-  renderRings();
-  $("graphtitle").textContent = "Loading " + id + "…";
-  const [g, ex] = await Promise.all([
-    get(`/rings/${id}/graph?limit=400`),
-    get(`/rings/${id}/explain?limit=40`)
-  ]);
-
-  $("graphtitle").textContent = `${id} — ${g.detected_typology} · ${g.nodes.length} accounts · ${g.edges.length} flagged transactions`;
-  const nodes = g.nodes.map(n => ({
-    id: n.id, label: n.label, title: `${n.id} (${n.role})`,
-    color: {background: roleColor[n.role] || "#8a7f6e", border: "#faf7f2"},
-    font: {color: "#2c2416", size: 11}, size: n.role === "peripheral" ? 8 : 13
-  }));
-  const edges = g.edges.map(e => ({
-    from: e.from, to: e.to, arrows: "to",
-    width: 1 + e.risk * 3, color: {color: riskColor(e.risk), opacity: .8},
-    dashes: e.truth === 0,
-    title: `risk ${e.risk.toFixed(3)} · $${fmt(e.amount, 2)} · ground truth: ${e.truth ? "laundering" : "not laundering"}`
-  }));
-  if(network) network.destroy();
-  network = new vis.Network($("net"), {nodes, edges}, {
-    physics: {stabilization: {iterations: 180}, barnesHut: {springLength: 110, gravitationalConstant: -9000}},
-    interaction: {hover: true, tooltipDelay: 120},
-    nodes: {shape: "dot", borderWidth: 2}
+  const nodes = g.nodes.map(n => {
+    const r = ROLE[n.role] || ROLE.peripheral;
+    return {
+      id: n.id,
+      label: n.label,
+      title: n.id + "\n" + n.role,
+      shape: "dot",
+      size: r.size,
+      color: {background: r.fill, border: r.border || "#12161C",
+              highlight: {background: r.fill, border: "#FFEAD1"}},
+      borderWidth: r.border ? 2.5 : 1.5,
+      font: {color: "#7F8895", size: 10, face: "IBM Plex Mono", strokeWidth: 0, vadjust: -2}
+    };
   });
 
-  const roles = {};
-  ex.accounts.forEach(a => roles[a.role] = (roles[a.role] || 0) + 1);
-  const truth = ex.edges.filter(e => e.is_laundering_ground_truth === 1).length;
-  $("detail").innerHTML = `
-    <h2>Audit trail — ${ex.ring_id}</h2>
-    <p style="margin:0 0 10px">${ex.summary}</p>
-    <div class="row"><span class="k">Detected typology</span><span class="v">${ex.detected_typology}</span></div>
-    <div class="row"><span class="k">Detection method</span><span class="v">${ex.detection_method}</span></div>
-    <div class="row"><span class="k">Mean / max risk</span><span class="v">${ex.mean_risk_score.toFixed(3)} / ${ex.max_risk_score.toFixed(3)}</span></div>
-    <div class="row"><span class="k">Total flagged amount</span><span class="v">$${fmt(ex.total_amount, 2)}</span></div>
-    <div class="row"><span class="k">Roles</span><span class="v">${Object.entries(roles).map(([k, v]) => k + " " + v).join(" · ")}</span></div>
-    <div class="row"><span class="k">Ground truth in shown edges</span><span class="v">${truth}/${ex.edges.length} laundering</span></div>
-    <table style="margin-top:10px"><thead><tr><th>From</th><th>To</th><th>Amount</th><th>Risk</th><th>Truth</th></tr></thead><tbody>
-      ${ex.edges.slice(0, 25).map(e => `<tr>
-        <td class="num" style="font-size:11px">${e.from_account}</td>
-        <td class="num" style="font-size:11px">${e.to_account}</td>
-        <td class="num">${fmt(e.amount, 2)}</td>
-        <td class="num" style="color:${riskColor(e.risk_score)}">${e.risk_score.toFixed(3)}</td>
-        <td class="num">${e.is_laundering_ground_truth ? "yes" : "no"}</td></tr>`).join("")}
-    </tbody></table>
-    <div class="note">${ex.disclaimer}</div>`;
+  const ordered = g.edges.slice().sort((a, b) => b.risk - a.risk).map((e, i) => ({
+    id: i,
+    from: e.from, to: e.to,
+    arrows: {to: {enabled: true, scaleFactor: 0.42}},
+    width: 0.6 + riskT(e.risk) * 2.6,
+    color: {color: riskColor(e.risk), highlight: "#FFEAD1", opacity: 0.85},
+    dashes: e.truth === 0 ? [4, 3] : false,
+    smooth: {type: "continuous", roundness: 0.18},
+    title: "risk " + e.risk.toFixed(4) + "\n" + money(e.amount) +
+           "\nground truth: " + (e.truth ? "laundering" : "not laundering")
+  }));
+
+  const edgesDS = new vis.DataSet([]);
+  network = new vis.Network($("net"), {nodes: new vis.DataSet(nodes), edges: edgesDS}, {
+    autoResize: true,
+    physics: {
+      enabled: true,
+      stabilization: REDUCED ? {enabled: true, iterations: 260, fit: true} : {enabled: false},
+      barnesHut: {springLength: 115, gravitationalConstant: -9500, centralGravity: 0.32,
+                  damping: 0.42, avoidOverlap: 0.15}
+    },
+    interaction: {hover: true, tooltipDelay: 110, navigationButtons: false, keyboard: false},
+    nodes: {shadow: false},
+    edges: {selectionWidth: 1.4}
+  });
+
+  /* The one deliberate motion moment: the ring assembles itself,
+     strongest edges first. Nothing else on this page animates. */
+  if(REDUCED){
+    edgesDS.add(ordered);
+    network.once("stabilizationIterationsDone", freeze);
+  }else{
+    const batches = 6, per = Math.ceil(ordered.length / batches) || 1;
+    for(let b = 0; b < batches; b++){
+      revealTimers.push(setTimeout(
+        () => edgesDS.add(ordered.slice(b * per, (b + 1) * per)), b * 70));
+    }
+    revealTimers.push(setTimeout(freeze, 2300));
+  }
+
+  network.on("selectNode", p => highlightAccount(p.nodes[0]));
+  network.on("deselectNode", () => highlightAccount(null));
 }
 
+function freeze(){
+  if(!network) return;
+  network.setOptions({physics: {enabled: false}});
+  network.fit(REDUCED ? {} : {animation: {duration: 320, easingFunction: "easeOutQuad"}});
+}
+
+$("fit").onclick = () => { if(network) network.fit(); };
+$("relayout").onclick = () => {
+  if(!network) return;
+  network.setOptions({physics: {enabled: true, stabilization: {enabled: false}}});
+  revealTimers.push(setTimeout(freeze, 1600));
+};
+$("toggle-rail").onclick = e => {
+  const wide = $("main").classList.toggle("wide");
+  e.target.textContent = wide ? "Show record" : "Hide record";
+  setTimeout(() => { if(network) network.redraw(); }, 60);
+};
+
+function highlightAccount(acct){
+  document.querySelectorAll("#evidence tr").forEach(tr =>
+    tr.classList.toggle("hit", !!acct && !!tr.dataset.accts && tr.dataset.accts.indexOf(acct) >= 0));
+}
+
+/* ── audit record ────────────────────────────────────────── */
+function renderRecord(ex){
+  const roles = {};
+  ex.accounts.forEach(a => { roles[a.role] = (roles[a.role] || 0) + 1; });
+  const truth = ex.edges.filter(e => e.is_laundering_ground_truth === 1).length;
+  const when = new Date(ex.flagged_at);
+
+  $("record").innerHTML =
+    '<div class="doc-head">' +
+      '<div class="rid mono">' + esc(ex.ring_id) + '</div>' +
+      '<div class="meta">' + esc(ex.detected_typology) + ' flagged ' +
+        when.toISOString().replace("T", " ").slice(0, 19) + ' UTC</div>' +
+    '</div>' +
+
+    '<h3>Finding</h3><p>' + esc(ex.summary) + '</p>' +
+
+    '<h3>Provenance</h3>' +
+    '<dl class="spec">' +
+      '<dt>Detection method</dt><dd>' + esc(ex.detection_method) + '</dd>' +
+      '<dt>Model version</dt><dd>' + esc(ex.model_version) + '</dd>' +
+      '<dt>Accounts / transactions</dt><dd>' + ex.size + ' / ' + ex.n_transactions + '</dd>' +
+      '<dt>Mean / max edge risk</dt><dd>' + ex.mean_risk_score.toFixed(4) + ' / ' + ex.max_risk_score.toFixed(4) + '</dd>' +
+      '<dt>Total flagged amount</dt><dd>' + money(ex.total_amount) + '</dd>' +
+      '<dt>Laundering in ground truth</dt><dd>' + truth + ' of ' + ex.edges.length + ' shown</dd>' +
+    '</dl>' +
+
+    '<h3>Account roles</h3>' +
+    '<div class="roster">' + Object.keys(roles).sort((a, b) => roles[b] - roles[a]).map(k =>
+      '<span class="role"><i style="background:' + (ROLE_SWATCH[k] || "#4A535F") + '"></i>' +
+      esc(k) + ' ' + roles[k] + '</span>').join("") + '</div>' +
+
+    '<h3>Contributing transactions</h3>' +
+    '<div class="tbl"><table id="evidence"><thead><tr><th>From</th><th>To</th><th>Amount</th><th>Risk</th><th>GT</th></tr></thead><tbody>' +
+    ex.edges.slice(0, 40).map(e =>
+      '<tr data-accts="' + esc(e.from_account + "|" + e.to_account) + '">' +
+        '<td class="acct" title="' + esc(e.from_account) + '">' + esc(shortAcct(e.from_account)) + '</td>' +
+        '<td class="acct" title="' + esc(e.to_account) + '">' + esc(shortAcct(e.to_account)) + '</td>' +
+        '<td class="num">' + fmt(e.amount, 2) + '</td>' +
+        '<td class="num" style="color:' + riskColor(e.risk_score) + '">' + e.risk_score.toFixed(3) + '</td>' +
+        '<td class="num">' + (e.is_laundering_ground_truth ? "yes" : "no") + '</td>' +
+      '</tr>').join("") + '</tbody></table></div>' +
+    (ex.edges.length > 40
+      ? '<div class="foot-note">Showing the 40 highest-risk of ' + ex.edges.length +
+        ' transactions returned by <span class="mono">/rings/' + esc(ex.ring_id) + '/explain</span>.</div>'
+      : '') +
+
+    '<div class="clause"><b>Advisory only.</b> ' + esc(ex.disclaimer) + '</div>';
+}
+
+/* ── model provenance ────────────────────────────────────── */
+function renderModel(m){
+  const order = [["baseline", "XGBoost (tabular)"], ["gnn", "GINE (graph)"]];
+  const present = order.filter(p => m.models && m.models[p[0]]);
+  let html = "";
+
+  if(!present.length){
+    html = '<p>No evaluation artifacts on disk yet. Run <span class="mono">python -m src.eval.metrics --compare</span>.</p>';
+  }else{
+    const bestPR = Math.max.apply(null, present.map(p => m.models[p[0]].metrics.pr_auc));
+    const bestCost = Math.min.apply(null, present.map(p => m.models[p[0]].cost_at_best.net_cost));
+    const bestRec = Math.max.apply(null, present.map(p => m.models[p[0]].metrics_at_best.recall));
+    const mark = (v, best) => v === best ? ' class="num win"' : ' class="num loss"';
+
+    html +=
+      '<h3>Held-out split, read at each model&rsquo;s cost-optimal threshold</h3>' +
+      '<div class="tbl"><table><thead><tr><th>Model</th><th>PR-AUC</th><th>Recall</th><th>Precision</th><th>Net cost</th></tr></thead><tbody>' +
+      present.map(p => {
+        const d = m.models[p[0]], mb = d.metrics_at_best, cb = d.cost_at_best;
+        return '<tr><td>' + p[1] + '</td>' +
+          '<td' + mark(d.metrics.pr_auc, bestPR) + '>' + d.metrics.pr_auc.toFixed(4) + '</td>' +
+          '<td' + mark(mb.recall, bestRec) + '>' + mb.recall.toFixed(4) + '</td>' +
+          '<td class="num loss">' + mb.precision.toFixed(4) + '</td>' +
+          '<td' + mark(cb.net_cost, bestCost) + '>$' + fmt(cb.net_cost) + '</td></tr>';
+      }).join("") + '</tbody></table></div>';
+
+    const any = m.models[present[0][0]], cm = any.cost_model, cb = any.cost_at_best;
+    html +=
+      '<div class="foot-note">Cost model is illustrative and is <b>not</b> Razorpay figures: $' +
+      cm.cost_per_false_positive + ' per false positive (one manual review), $' +
+      cm.cost_per_false_negative + ' per missed laundering transaction. Flagging nothing at all would ' +
+      'cost $' + fmt(cb.baseline_do_nothing_cost) + ' on this split. PR-AUC is threshold-free; recall, ' +
+      'precision and net cost are read at each model&rsquo;s own cost-optimal threshold, not at 0.5.</div>' +
+      '<div class="foot-note">Neither model wins outright. The tabular model is the more cost-efficient ' +
+      'scorer of individual transactions; the graph stage is what turns a scored edge set into the ' +
+      'ring-level structure this console shows.</div>';
+  }
+
+  const rec = m.rings && m.rings.recovery;
+  if(rec && rec.n_groups){
+    html +=
+      '<h3>Ring recovery against ground-truth pattern groups</h3>' +
+      '<dl class="spec">' +
+        '<dt>Groups recovered</dt><dd>' + rec.n_recovered + ' of ' + rec.n_groups +
+          ' (' + (rec.recovery_rate * 100).toFixed(1) + '%)</dd>' +
+        '<dt>Candidate rings extracted</dt><dd>' + fmt(rec.n_rings) + '</dd>' +
+        '<dt>Unmatched candidates</dt><dd>' + fmt(rec.unmatched_rings) + '</dd>' +
+        '<dt>Minimum overlap to count</dt><dd>' + rec.min_overlap + '</dd>' +
+      '</dl>' +
+      '<div class="tbl" style="margin-top:12px"><table><thead><tr><th>Shape</th><th>Recovered</th><th>Rate</th></tr></thead><tbody>' +
+      Object.keys(rec.by_typology || {}).sort((a, b) => rec.by_typology[b].total - rec.by_typology[a].total)
+        .map(k => {
+          const v = rec.by_typology[k];
+          return '<tr><td><span class="topo">' + glyph(k) + esc(k) + '</span></td>' +
+            '<td class="num">' + v.recovered + ' / ' + v.total + '</td>' +
+            '<td class="num">' + (v.recovery_rate * 100).toFixed(0) + '%</td></tr>';
+        }).join("") + '</tbody></table></div>';
+  }
+
+  const meta = m.rings || {};
+  html +=
+    '<h3>Extraction settings</h3>' +
+    '<dl class="spec">' +
+      '<dt>Community detection</dt><dd>' + esc(meta.method || "—") + '</dd>' +
+      '<dt>Edge risk threshold</dt><dd>' + (meta.threshold != null ? meta.threshold : "—") + '</dd>' +
+      '<dt>Edges scored by</dt><dd>' + esc(meta.source_model || "—") + '</dd>' +
+      '<dt>Accounts in graph</dt><dd>' + fmt(m.graph ? m.graph.n_accounts : 0) + '</dd>' +
+      '<dt>Transactions in graph</dt><dd>' + fmt(m.graph ? m.graph.n_transactions : 0) + '</dd>' +
+    '</dl>' +
+    '<div class="clause"><b>Advisory only.</b> Every number here describes a model, not a decision. ' +
+    'RingWatch exposes no endpoint that can block, freeze, hold or reverse an account or a transaction, ' +
+    'and every score and ring explanation is written to an append-only audit trail before it is returned.</div>';
+
+  $("model").innerHTML = html;
+}
+
+/* ── tabs ────────────────────────────────────────────────── */
+document.querySelectorAll(".tab").forEach(tab => {
+  tab.onclick = () => document.querySelectorAll(".tab").forEach(t => {
+    const on = t === tab;
+    t.setAttribute("aria-selected", String(on));
+    $(t.getAttribute("aria-controls")).toggleAttribute("data-active", on);
+  });
+});
+
+function openTab(id){
+  const tab = $("tab-" + id) || $("tab-record");
+  if(tab) tab.click();
+}
+
+/* ── selection ───────────────────────────────────────────── */
+async function selectRing(id){
+  selected = id;
+  seen.add(id);
+  renderQueue();
+  $("canvas-blank").hidden = true;
+  ["canvas-head", "canvas-tools", "legend"].forEach(k => { $(k).hidden = false; });
+  $("ctitle").textContent = id;
+  $("csub").textContent = "loading…";
+
+  const res = await Promise.all([
+    get("/rings/" + encodeURIComponent(id) + "/graph?limit=400"),
+    get("/rings/" + encodeURIComponent(id) + "/explain?limit=200")
+  ]);
+  const g = res[0], ex = res[1];
+  if(selected !== id) return;
+
+  $("ctitle").textContent = id + " — " + g.detected_typology;
+  $("csub").innerHTML = g.nodes.length + ' accounts<span class="sep"></span>' +
+    g.edges.length + ' flagged transactions<span class="sep"></span>' + money(ex.total_amount);
+
+  drawGraph(g);
+  renderRecord(ex);
+}
+
+/* ── boot ────────────────────────────────────── */
 (async function init(){
+  let health, metrics, rings;
+
+  /* Only a transport failure is allowed to hide the console. A render bug
+     must never masquerade as "the API is down". */
   try{
-    const [m, rings] = await Promise.all([get("/metrics"), get("/rings?limit=300&min_size=3")]);
-    renderMetrics(m); renderRecovery(m);
-    RINGS = rings.rings; renderRings();
-    $("filter").onchange = renderRings;
-    if(RINGS.length){
-      const biggest = [...RINGS].sort((a, b) => b.n_transactions - a.n_transactions)[0];
-      selectRing(biggest.ring_id);
-    }
-  }catch(e){
-    document.querySelector("main").insertAdjacentHTML("afterbegin",
-      `<div class="card err">Could not reach the API at ${API || location.origin}.
-       Start it with <code>uvicorn src.api.main:app</code>, then reload. (${e.message})</div>`);
+    const res = await Promise.all([
+      get("/health").catch(() => null),
+      get("/metrics"),
+      get("/rings?limit=500&min_size=3")
+    ]);
+    health = res[0]; metrics = res[1]; rings = res[2];
+  }catch(err){
+    $("app").hidden = true;
+    $("down").hidden = false;
+    $("down-detail").textContent = "Tried " + (API || location.origin) +
+      " — " + ((err && err.message) || err) + ".";
+    return;
+  }
+
+  $("app").hidden = false;
+  if(health && health.status === "ok"){
+    $("health").className = "health up";
+    $("health-txt").textContent = "API " + (health.version || "") + " · " +
+      (health.mode || "advisory-only");
+  }else{
+    $("health").className = "health down";
+    $("health-txt").textContent = "API reachable, health unknown";
+  }
+
+  RINGS = (rings && rings.rings) || [];
+  TOTAL = (rings && rings.total) || RINGS.length;
+  if(RINGS.length){
+    const scores = RINGS.map(r => r.mean_risk_score);
+    LO = Math.min.apply(null, scores);
+    HI = Math.max.apply(null, scores);
+    $("ramp-label").textContent = "risk " + LO.toFixed(2) + "–" + HI.toFixed(2);
+  }
+
+  renderModel(metrics);
+  renderQueue();
+  if(location.hash) openTab(location.hash.slice(1));
+
+  if(RINGS.length){
+    /* The top of a risk-sorted queue is full of 3-account stubs scoring 1.000.
+       Open on the highest-risk ring that actually has a topology to read. */
+    const substantial = RINGS.filter(r => r.n_transactions >= 6 && r.size >= 5)
+      .sort((a, b) => b.mean_risk_score - a.mean_risk_score);
+    selectRing((substantial[0] || visibleRings()[0]).ring_id);
+  }else{
+    $("canvas-blank").textContent =
+      "No rings extracted yet. Run: python -m src.rings.extract --threshold 0.8";
   }
 })();
 </script>
