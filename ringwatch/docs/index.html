@@ -252,7 +252,8 @@ footer{padding:44px var(--pad) 56px;border-top:1px solid var(--hair-d)}
     </div>
     <p class="note" style="margin-top:18px">
       Razorpay AI Buildathon, Track 02 — AI Risk Manager. Advisory only: RingWatch flags and
-      explains, and cannot block, freeze, or reverse anything.
+      explains, and cannot block, freeze, or reverse anything. The console reads from a locally
+      running API; this page does not.
     </p>
   </div>
 </section>
@@ -506,12 +507,13 @@ footer{padding:44px var(--pad) 56px;border-top:1px solid var(--hair-d)}
     <span class="links">
       <a href="https://github.com/ABUBAK3R-K/Razorpay-Buildathon">GitHub repository</a>
       <a href="../dashboard/index.html">Triage console</a>
-      <a href="http://127.0.0.1:8000/docs">API reference</a>
+      <a href="https://github.com/ABUBAK3R-K/Razorpay-Buildathon/blob/main/ringwatch/README.md#api-endpoints">API reference</a>
     </span>
     <p class="note">
-      The console and the API reference both read from a locally running service — start it with
-      <span class="mono">uvicorn src.api.main:app</span>. Built for the Razorpay AI Buildathon,
-      Track 02.
+      The console reads from a locally running service — start it with
+      <span class="mono">uvicorn src.api.main:app</span> and open
+      <span class="mono">127.0.0.1:8000/dashboard/</span>. Interactive API docs are served at
+      <span class="mono">/docs</span> alongside it. Built for the Razorpay AI Buildathon, Track 02.
     </p>
   </div>
 </footer>
